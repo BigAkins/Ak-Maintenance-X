@@ -1,4 +1,5 @@
 import os
+import json
 import base64
 import hashlib
 import secrets
@@ -18,6 +19,7 @@ REDIRECT_URI = os.getenv("X_REDIRECT_URI")
 
 AUTH_URL = "https://x.com/i/oauth2/authorize"
 TOKEN_URL = "https://api.x.com/2/oauth2/token"
+TOKEN_FILE = "token.json"
 
 SCOPES = [
     "tweet.read",
@@ -36,20 +38,18 @@ returned_error_description = None
 
 
 def generate_code_verifier():
-    """
-    PKCE code verifier:
-    random high-entropy string
-    """
     return secrets.token_urlsafe(64)
 
 
 def generate_code_challenge(code_verifier):
-    """
-    PKCE code challenge:
-    BASE64URL-ENCODE(SHA256(code_verifier))
-    """
     digest = hashlib.sha256(code_verifier.encode("utf-8")).digest()
     return base64.urlsafe_b64encode(digest).decode("utf-8").rstrip("=")
+
+
+def save_token(token_data):
+    with open(TOKEN_FILE, "w", encoding="utf-8") as file:
+        json.dump(token_data, file, indent=2)
+    print(f"\nToken saved to {TOKEN_FILE}")
 
 
 class CallbackHandler(BaseHTTPRequestHandler):
@@ -168,6 +168,9 @@ def main():
 
     if "refresh_token" in token_data:
         print("Refresh token received too.")
+
+    save_token(token_data)
+
 
 if __name__ == "__main__":
     main()
