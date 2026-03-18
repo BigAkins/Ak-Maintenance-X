@@ -8,12 +8,12 @@ import requests
 
 TOKEN_FILE = "token.json"
 ME_URL = "https://api.x.com/2/users/me"
-LIKES_URL = "https://api.x.com/2/users/{user_id}/liked_tweets"
-UNLIKE_URL = "https://api.x.com/2/users/{user_id}/likes/{tweet_id}"
+FOLLOWING_URL = "https://api.x.com/2/users/{user_id}/following"
+UNFOLLOW_URL = "https://api.x.com/2/users/{source_user_id}/following/{target_user_id}"
 
 DRY_RUN = True
 REQUEST_DELAY_SECONDS = 1.0
-MAX_TWEETS_TO_PROCESS = 5
+MAX_USERS_TO_PROCESS = 5
 
 LOGS_DIR = "logs"
 
@@ -50,8 +50,8 @@ def get_profile(access_token):
     return response.json()["data"]
 
 
-def get_liked_tweets(access_token, user_id):
-    url = LIKES_URL.format(user_id=user_id)
+def get_following(access_token, user_id):
+    url = FOLLOWING_URL.format(user_id=user_id)
 
     response = requests.get(
         url,
@@ -65,8 +65,11 @@ def get_liked_tweets(access_token, user_id):
     return data.get("data", [])
 
 
-def unlike_tweet(access_token, user_id, tweet_id):
-    url = UNLIKE_URL.format(user_id=user_id, tweet_id=tweet_id)
+def unfollow_user(access_token, source_user_id, target_user_id):
+    url = UNFOLLOW_URL.format(
+        source_user_id=source_user_id,
+        target_user_id=target_user_id,
+    )
 
     response = requests.delete(
         url,
@@ -83,55 +86,60 @@ def ensure_logs_dir():
 
 def build_log_file_path():
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    return os.path.join(LOGS_DIR, f"bulk_unlike_log_{timestamp}.csv")
+    return os.path.join(LOGS_DIR, f"bulk_unfollow_log_{timestamp}.csv")
 
 
 def write_log_header(csv_writer):
     csv_writer.writerow(
         [
             "timestamp",
-            "tweet_id",
-            "tweet_text_preview",
+            "target_user_id",
+            "username",
+            "name",
             "status",
             "details",
         ]
     )
 
 
-def log_result(csv_writer, tweet_id, tweet_text, status, details):
+def log_result(csv_writer, target_user_id, username, name, status, details):
     csv_writer.writerow(
         [
             datetime.now().isoformat(),
-            tweet_id,
-            tweet_text[:100].replace("\n", " "),
+            target_user_id,
+            username,
+            name,
             status,
             details,
         ]
     )
 
 
-def preview_tweets(tweets):
-    print("\n--- BULK UNLIKE PREVIEW ---")
-    print(f"Found {len(tweets)} liked tweets on this page.")
-    print(f"Configured to process up to {MAX_TWEETS_TO_PROCESS} tweets.")
+def preview_users(users):
+    print("\n--- BULK UNFOLLOW PREVIEW ---")
+    print(f"Found {len(users)} followed accounts on this page.")
+    print(f"Configured to process up to {MAX_USERS_TO_PROCESS} accounts.")
 
-    tweets_to_process = tweets[:MAX_TWEETS_TO_PROCESS]
+    users_to_process = users[:MAX_USERS_TO_PROCESS]
 
-    if not tweets_to_process:
-        print("No liked tweets found to process.")
-        return tweets_to_process
+    if not users_to_process:
+        print("No followed accounts found to process.")
+        return users_to_process
 
-    print("\nSample tweets to process:")
-    for tweet in tweets_to_process[:10]:
-        print(f"- [{tweet['id']}] {tweet.get('text', '')[:100]}")
+    print("\nSample accounts to process:")
+    for user in users_to_process:
+        user_id = user.get("id", "unknown_id")
+        username = user.get("username", "unknown_username")
+        name = user.get("name", "unknown_name")
+        print(f"- [{user_id}] @{username} ({name})")
 
     if DRY_RUN:
-        print("\nDRY_RUN is ON. No tweets will actually be unliked.")
+        print("\nDRY_RUN is ON. No accounts will actually be unfollowed.")
 
-    return tweets_to_process
+    return users_to_process
 
 
-def process_unlikes(access_token, user_id, tweets_to_process, log_file_path):
+def process_unfollows(access_token, source_user_id, users_to_process, log_file_path):
     success_count = 0
     failure_count = 0
 
@@ -139,38 +147,42 @@ def process_unlikes(access_token, user_id, tweets_to_process, log_file_path):
         csv_writer = csv.writer(log_file)
         write_log_header(csv_writer)
 
-        for tweet in tweets_to_process:
-            tweet_id = tweet.get("id", "unknown_id")
-            tweet_text = tweet.get("text", "")
+        for user in users_to_process:
+            target_user_id = user.get("id", "unknown_id")
+            username = user.get("username", "unknown_username")
+            name = user.get("name", "unknown_name")
 
             if DRY_RUN:
-                print(f"[DRY RUN] Would unlike tweet {tweet_id}")
+                print(f"[DRY RUN] Would unfollow @{username} ({target_user_id})")
                 log_result(
                     csv_writer,
-                    tweet_id,
-                    tweet_text,
+                    target_user_id,
+                    username,
+                    name,
                     "DRY_RUN",
                     "Preview only - no action taken",
                 )
                 continue
 
             try:
-                result = unlike_tweet(access_token, user_id, tweet_id)
-                print(f"[SUCCESS] Unliked tweet {tweet_id}: {result}")
+                result = unfollow_user(access_token, source_user_id, target_user_id)
+                print(f"[SUCCESS] Unfollowed @{username} ({target_user_id}): {result}")
                 log_result(
                     csv_writer,
-                    tweet_id,
-                    tweet_text,
+                    target_user_id,
+                    username,
+                    name,
                     "SUCCESS",
                     str(result),
                 )
                 success_count += 1
             except requests.HTTPError as error:
-                print(f"[FAILED] Could not unlike tweet {tweet_id}: {error}")
+                print(f"[FAILED] Could not unfollow @{username} ({target_user_id}): {error}")
                 log_result(
                     csv_writer,
-                    tweet_id,
-                    tweet_text,
+                    target_user_id,
+                    username,
+                    name,
                     "FAILED",
                     str(error),
                 )
@@ -187,39 +199,39 @@ def main():
 
     print("Fetching authenticated user profile...")
     profile = get_profile(access_token)
-    user_id = profile["id"]
+    source_user_id = profile["id"]
 
     print("\nAuthenticated as:")
     print(f"Name: {profile['name']}")
     print(f"Username: @{profile['username']}")
-    print(f"User ID: {user_id}")
+    print(f"User ID: {source_user_id}")
 
-    print("\nFetching liked tweets...")
-    liked_tweets = get_liked_tweets(access_token, user_id)
+    print("\nFetching following list...")
+    following = get_following(access_token, source_user_id)
 
-    tweets_to_process = preview_tweets(liked_tweets)
+    users_to_process = preview_users(following)
 
     ensure_logs_dir()
     log_file_path = build_log_file_path()
 
     print(f"\nLog file will be written to: {log_file_path}")
 
-    success_count, failure_count = process_unlikes(
+    success_count, failure_count = process_unfollows(
         access_token,
-        user_id,
-        tweets_to_process,
+        source_user_id,
+        users_to_process,
         log_file_path,
     )
 
-    print("\n--- BULK UNLIKE SUMMARY ---")
+    print("\n--- BULK UNFOLLOW SUMMARY ---")
     if DRY_RUN:
         print("Mode: DRY RUN")
-        print(f"Previewed {len(tweets_to_process)} tweets.")
+        print(f"Previewed {len(users_to_process)} accounts.")
         print("No changes were made.")
     else:
         print("Mode: LIVE")
-        print(f"Successfully unliked: {success_count}")
-        print(f"Failed to unlike: {failure_count}")
+        print(f"Successfully unfollowed: {success_count}")
+        print(f"Failed to unfollow: {failure_count}")
 
     print(f"Log saved to: {log_file_path}")
 
