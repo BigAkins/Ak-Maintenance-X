@@ -17,7 +17,7 @@ MAX_USERS_TO_PROCESS = 5
 
 # Accounts you never want to unfollow
 KEEP_USERNAMES = {
-    "Akinooola",
+    "akinooola",
 }
 
 LOGS_DIR = "logs"

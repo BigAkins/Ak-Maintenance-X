@@ -6,3 +6,4 @@ logs/
 *.csv
 token.json
 non_follower_candidates.json
+protected_accounts.json

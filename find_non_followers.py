@@ -1,23 +1,17 @@
 import json
+import os
 import requests
 
 TOKEN_FILE = "token.json"
 OUTPUT_FILE = "non_follower_candidates.json"
+PROTECTED_ACCOUNTS_FILE = "protected_accounts.json"
 
 ME_URL = "https://api.x.com/2/users/me"
 FOLLOWING_URL = "https://api.x.com/2/users/{user_id}/following"
 FOLLOWERS_URL = "https://api.x.com/2/users/{user_id}/followers"
 
-# Keep public defaults minimal for GitHub
-KEEP_USERNAMES = {
-    "Akinooola",
-}
-
-KEEP_USER_IDS = {
-    # Add protected IDs locally if you want extra safety
-    # "1509718054346788866",
-    # "4416456732",
-}
+DEFAULT_KEEP_USERNAMES = {"akinooola"}
+DEFAULT_KEEP_USER_IDS = set()
 
 MAX_RESULTS_PER_PAGE = 1000
 
@@ -58,11 +52,43 @@ def normalize_username(username):
     return username.strip().lower().lstrip("@")
 
 
-def is_protected_user(user):
+def load_protected_accounts():
+    keep_usernames = {normalize_username(name) for name in DEFAULT_KEEP_USERNAMES}
+    keep_user_ids = {str(user_id).strip() for user_id in DEFAULT_KEEP_USER_IDS}
+
+    if not os.path.exists(PROTECTED_ACCOUNTS_FILE):
+        print(
+            f"[INFO] {PROTECTED_ACCOUNTS_FILE} not found. "
+            "Using default built-in protected accounts only."
+        )
+        return keep_usernames, keep_user_ids
+
+    try:
+        with open(PROTECTED_ACCOUNTS_FILE, "r", encoding="utf-8") as file:
+            data = json.load(file)
+
+        file_usernames = data.get("keep_usernames", [])
+        file_user_ids = data.get("keep_user_ids", [])
+
+        keep_usernames.update(normalize_username(name) for name in file_usernames)
+        keep_user_ids.update(str(user_id).strip() for user_id in file_user_ids)
+
+        print(f"[INFO] Loaded protected accounts from {PROTECTED_ACCOUNTS_FILE}")
+        return keep_usernames, keep_user_ids
+
+    except Exception as error:
+        print(
+            f"[WARNING] Could not read {PROTECTED_ACCOUNTS_FILE}: {error}. "
+            "Using default built-in protected accounts only."
+        )
+        return keep_usernames, keep_user_ids
+
+
+def is_protected_user(user, keep_usernames, keep_user_ids):
     user_id = str(user.get("id", "")).strip()
     username = normalize_username(user.get("username", ""))
 
-    return user_id in KEEP_USER_IDS or username in KEEP_USERNAMES
+    return user_id in keep_user_ids or username in keep_usernames
 
 
 def fetch_all_users_from_paginated_endpoint(access_token, base_url):
@@ -129,12 +155,12 @@ def get_non_followers(following, followers):
     return non_followers
 
 
-def split_protected_and_candidates(users):
+def split_protected_and_candidates(users, keep_usernames, keep_user_ids):
     protected_users = []
     candidates = []
 
     for user in users:
-        if is_protected_user(user):
+        if is_protected_user(user, keep_usernames, keep_user_ids):
             protected_users.append(user)
         else:
             candidates.append(user)
@@ -142,7 +168,14 @@ def split_protected_and_candidates(users):
     return protected_users, candidates
 
 
-def save_candidates(profile, following, followers, non_followers, protected_users, candidates):
+def save_candidates(
+    profile,
+    following,
+    followers,
+    non_followers,
+    protected_users,
+    candidates,
+):
     output_data = {
         "authenticated_user": {
             "id": profile.get("id"),
@@ -211,11 +244,18 @@ def main():
     print("\nFetching all followers pages...")
     followers = get_all_followers(access_token, user_id)
 
+    print("\nLoading protected accounts...")
+    keep_usernames, keep_user_ids = load_protected_accounts()
+
     print("\nComparing full following vs full followers...")
     non_followers = get_non_followers(following, followers)
 
     print("Applying protected keep list...")
-    protected_users, candidates = split_protected_and_candidates(non_followers)
+    protected_users, candidates = split_protected_and_candidates(
+        non_followers,
+        keep_usernames,
+        keep_user_ids,
+    )
 
     preview_results(protected_users, candidates)
 
