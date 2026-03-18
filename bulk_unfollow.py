@@ -15,6 +15,11 @@ DRY_RUN = True
 REQUEST_DELAY_SECONDS = 1.0
 MAX_USERS_TO_PROCESS = 5
 
+# Accounts you never want to unfollow
+KEEP_USERNAMES = {
+    "Akinooola",
+}
+
 LOGS_DIR = "logs"
 
 
@@ -115,18 +120,46 @@ def log_result(csv_writer, target_user_id, username, name, status, details):
     )
 
 
-def preview_users(users):
+def is_protected_user(user):
+    username = user.get("username", "")
+    return username in KEEP_USERNAMES
+
+
+def filter_unfollow_candidates(users):
+    protected_users = []
+    unfollow_candidates = []
+
+    for user in users:
+        if is_protected_user(user):
+            protected_users.append(user)
+        else:
+            unfollow_candidates.append(user)
+
+    return protected_users, unfollow_candidates
+
+
+def preview_users(all_users, protected_users, unfollow_candidates):
     print("\n--- BULK UNFOLLOW PREVIEW ---")
-    print(f"Found {len(users)} followed accounts on this page.")
+    print(f"Found {len(all_users)} followed accounts on this page.")
+    print(f"Protected accounts found: {len(protected_users)}")
+    print(f"Eligible unfollow candidates found: {len(unfollow_candidates)}")
     print(f"Configured to process up to {MAX_USERS_TO_PROCESS} accounts.")
 
-    users_to_process = users[:MAX_USERS_TO_PROCESS]
+    users_to_process = unfollow_candidates[:MAX_USERS_TO_PROCESS]
+
+    if protected_users:
+        print("\nProtected accounts that will be skipped:")
+        for user in protected_users[:10]:
+            user_id = user.get("id", "unknown_id")
+            username = user.get("username", "unknown_username")
+            name = user.get("name", "unknown_name")
+            print(f"- [{user_id}] @{username} ({name})")
 
     if not users_to_process:
-        print("No followed accounts found to process.")
+        print("\nNo eligible accounts found to process.")
         return users_to_process
 
-    print("\nSample accounts to process:")
+    print("\nAccounts that would be processed:")
     for user in users_to_process:
         user_id = user.get("id", "unknown_id")
         username = user.get("username", "unknown_username")
@@ -209,7 +242,13 @@ def main():
     print("\nFetching following list...")
     following = get_following(access_token, source_user_id)
 
-    users_to_process = preview_users(following)
+    protected_users, unfollow_candidates = filter_unfollow_candidates(following)
+
+    users_to_process = preview_users(
+        following,
+        protected_users,
+        unfollow_candidates,
+    )
 
     ensure_logs_dir()
     log_file_path = build_log_file_path()
@@ -226,7 +265,7 @@ def main():
     print("\n--- BULK UNFOLLOW SUMMARY ---")
     if DRY_RUN:
         print("Mode: DRY RUN")
-        print(f"Previewed {len(users_to_process)} accounts.")
+        print(f"Previewed {len(users_to_process)} eligible accounts.")
         print("No changes were made.")
     else:
         print("Mode: LIVE")
