@@ -6,17 +6,24 @@ from datetime import datetime
 
 import requests
 
-TOKEN_FILE = "token.json"
+from cleanup_config import (
+    TOKEN_FILE,
+    LOGS_DIR,
+    DRY_RUN_DEFAULT,
+    REQUEST_DELAY_SECONDS_DEFAULT,
+    MAX_USERS_TO_PROCESS_DEFAULT,
+    STOP_ON_RATE_LIMIT_DEFAULT,
+)
+
 CANDIDATES_FILE = "non_follower_candidates.json"
 ME_URL = "https://api.x.com/2/users/me"
 UNFOLLOW_URL = "https://api.x.com/2/users/{source_user_id}/following/{target_user_id}"
 
-DRY_RUN = True
-REQUEST_DELAY_SECONDS = 2.0
-MAX_USERS_TO_PROCESS = 5
-STOP_ON_RATE_LIMIT = True
+DRY_RUN = DRY_RUN_DEFAULT
+REQUEST_DELAY_SECONDS = REQUEST_DELAY_SECONDS_DEFAULT
+MAX_USERS_TO_PROCESS = MAX_USERS_TO_PROCESS_DEFAULT
+STOP_ON_RATE_LIMIT = STOP_ON_RATE_LIMIT_DEFAULT
 
-LOGS_DIR = "logs"
 LOG_FILE_PREFIX = "bulk_unfollow_non_followers_log_"
 
 
