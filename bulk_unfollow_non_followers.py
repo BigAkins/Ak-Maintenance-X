@@ -7,15 +7,19 @@ from datetime import datetime
 import requests
 
 from cleanup_config import (
-    TOKEN_FILE,
     LOGS_DIR,
+    NON_FOLLOWER_CANDIDATES_FILE,
     DRY_RUN_DEFAULT,
     REQUEST_DELAY_SECONDS_DEFAULT,
     MAX_USERS_TO_PROCESS_DEFAULT,
     STOP_ON_RATE_LIMIT_DEFAULT,
 )
+from cleanup_helpers import (
+    load_access_token,
+    get_profile,
+    make_headers,
+)
 
-CANDIDATES_FILE = "non_follower_candidates.json"
 ME_URL = "https://api.x.com/2/users/me"
 UNFOLLOW_URL = "https://api.x.com/2/users/{source_user_id}/following/{target_user_id}"
 
@@ -27,25 +31,9 @@ STOP_ON_RATE_LIMIT = STOP_ON_RATE_LIMIT_DEFAULT
 LOG_FILE_PREFIX = "bulk_unfollow_non_followers_log_"
 
 
-def load_access_token():
-    try:
-        with open(TOKEN_FILE, "r", encoding="utf-8") as file:
-            token_data = json.load(file)
-    except FileNotFoundError as exc:
-        raise FileNotFoundError(
-            "token.json not found. Run auth_test.py first to authenticate."
-        ) from exc
-
-    access_token = token_data.get("access_token")
-    if not access_token:
-        raise ValueError("No access_token found in token.json")
-
-    return access_token
-
-
 def load_candidates_file():
     try:
-        with open(CANDIDATES_FILE, "r", encoding="utf-8") as file:
+        with open(NON_FOLLOWER_CANDIDATES_FILE, "r", encoding="utf-8") as file:
             candidate_data = json.load(file)
     except FileNotFoundError as exc:
         raise FileNotFoundError(
@@ -57,22 +45,6 @@ def load_candidates_file():
     authenticated_user = candidate_data.get("authenticated_user", {})
 
     return authenticated_user, summary, candidates
-
-
-def make_headers(access_token):
-    return {
-        "Authorization": f"Bearer {access_token}",
-    }
-
-
-def get_profile(access_token):
-    response = requests.get(
-        ME_URL,
-        headers=make_headers(access_token),
-        timeout=30,
-    )
-    response.raise_for_status()
-    return response.json()["data"]
 
 
 def unfollow_user(access_token, source_user_id, target_user_id):

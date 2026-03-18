@@ -1,5 +1,4 @@
 import csv
-import json
 import os
 import time
 from datetime import datetime
@@ -7,11 +6,15 @@ from datetime import datetime
 import requests
 
 from cleanup_config import (
-    TOKEN_FILE,
     LOGS_DIR,
     DRY_RUN_DEFAULT,
     REQUEST_DELAY_SECONDS_DEFAULT,
     MAX_TWEETS_TO_PROCESS_DEFAULT,
+)
+from cleanup_helpers import (
+    load_access_token,
+    get_profile,
+    make_headers,
 )
 
 ME_URL = "https://api.x.com/2/users/me"
@@ -21,38 +24,6 @@ UNLIKE_URL = "https://api.x.com/2/users/{user_id}/likes/{tweet_id}"
 DRY_RUN = DRY_RUN_DEFAULT
 REQUEST_DELAY_SECONDS = REQUEST_DELAY_SECONDS_DEFAULT
 MAX_TWEETS_TO_PROCESS = MAX_TWEETS_TO_PROCESS_DEFAULT
-
-
-def load_access_token():
-    try:
-        with open(TOKEN_FILE, "r", encoding="utf-8") as file:
-            token_data = json.load(file)
-    except FileNotFoundError as exc:
-        raise FileNotFoundError(
-            "token.json not found. Run auth_test.py first to authenticate."
-        ) from exc
-
-    access_token = token_data.get("access_token")
-    if not access_token:
-        raise ValueError("No access_token found in token.json")
-
-    return access_token
-
-
-def make_headers(access_token):
-    return {
-        "Authorization": f"Bearer {access_token}",
-    }
-
-
-def get_profile(access_token):
-    response = requests.get(
-        ME_URL,
-        headers=make_headers(access_token),
-        timeout=30,
-    )
-    response.raise_for_status()
-    return response.json()["data"]
 
 
 def get_liked_tweets(access_token, user_id):
