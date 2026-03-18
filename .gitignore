@@ -5,3 +5,4 @@ __pycache__/
 logs/
 *.csv
 token.json
+non_follower_candidates.json
