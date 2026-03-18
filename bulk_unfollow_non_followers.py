@@ -12,10 +12,12 @@ ME_URL = "https://api.x.com/2/users/me"
 UNFOLLOW_URL = "https://api.x.com/2/users/{source_user_id}/following/{target_user_id}"
 
 DRY_RUN = True
-REQUEST_DELAY_SECONDS = 1.0
+REQUEST_DELAY_SECONDS = 2.0
 MAX_USERS_TO_PROCESS = 5
+STOP_ON_RATE_LIMIT = True
 
 LOGS_DIR = "logs"
+LOG_FILE_PREFIX = "bulk_unfollow_non_followers_log_"
 
 
 def load_access_token():
@@ -87,7 +89,7 @@ def ensure_logs_dir():
 
 def build_log_file_path():
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    return os.path.join(LOGS_DIR, f"bulk_unfollow_non_followers_log_{timestamp}.csv")
+    return os.path.join(LOGS_DIR, f"{LOG_FILE_PREFIX}{timestamp}.csv")
 
 
 def write_log_header(csv_writer):
@@ -116,9 +118,49 @@ def log_result(csv_writer, target_user_id, username, name, status, details):
     )
 
 
-def preview_candidates(summary, candidates):
+def get_successfully_processed_user_ids():
+    if not os.path.exists(LOGS_DIR):
+        return set()
+
+    successful_ids = set()
+
+    for filename in os.listdir(LOGS_DIR):
+        if not filename.startswith(LOG_FILE_PREFIX) or not filename.endswith(".csv"):
+            continue
+
+        file_path = os.path.join(LOGS_DIR, filename)
+
+        try:
+            with open(file_path, "r", encoding="utf-8") as file:
+                reader = csv.DictReader(file)
+                for row in reader:
+                    if row.get("status") == "SUCCESS":
+                        successful_ids.add(str(row.get("target_user_id", "")).strip())
+        except Exception as error:
+            print(f"[WARNING] Could not read log file {filename}: {error}")
+
+    return successful_ids
+
+
+def filter_out_already_processed_candidates(candidates, processed_ids):
+    remaining_candidates = []
+    skipped_count = 0
+
+    for user in candidates:
+        user_id = str(user.get("id", "")).strip()
+        if user_id in processed_ids:
+            skipped_count += 1
+            continue
+        remaining_candidates.append(user)
+
+    return remaining_candidates, skipped_count
+
+
+def preview_candidates(summary, original_candidates, remaining_candidates, skipped_count):
     print("\n--- NON-FOLLOWER UNFOLLOW PREVIEW ---")
-    print(f"Eligible candidates in file: {len(candidates)}")
+    print(f"Eligible candidates in file: {len(original_candidates)}")
+    print(f"Already successfully processed from logs: {skipped_count}")
+    print(f"Remaining candidates after resume filter: {len(remaining_candidates)}")
     print(f"Configured to process up to {MAX_USERS_TO_PROCESS} accounts.")
 
     if summary:
@@ -126,10 +168,10 @@ def preview_candidates(summary, candidates):
         for key, value in summary.items():
             print(f"- {key}: {value}")
 
-    users_to_process = candidates[:MAX_USERS_TO_PROCESS]
+    users_to_process = remaining_candidates[:MAX_USERS_TO_PROCESS]
 
     if not users_to_process:
-        print("\nNo eligible candidates found to process.")
+        print("\nNo remaining eligible candidates found to process.")
         return users_to_process
 
     print("\nCandidates that would be processed:")
@@ -148,6 +190,7 @@ def preview_candidates(summary, candidates):
 def process_unfollows(access_token, source_user_id, users_to_process, log_file_path):
     success_count = 0
     failure_count = 0
+    stopped_due_to_rate_limit = False
 
     with open(log_file_path, "w", newline="", encoding="utf-8") as log_file:
         csv_writer = csv.writer(log_file)
@@ -182,7 +225,12 @@ def process_unfollows(access_token, source_user_id, users_to_process, log_file_p
                     str(result),
                 )
                 success_count += 1
+
             except requests.HTTPError as error:
+                status_code = None
+                if error.response is not None:
+                    status_code = error.response.status_code
+
                 print(f"[FAILED] Could not unfollow non-follower @{username} ({target_user_id}): {error}")
                 log_result(
                     csv_writer,
@@ -194,9 +242,14 @@ def process_unfollows(access_token, source_user_id, users_to_process, log_file_p
                 )
                 failure_count += 1
 
+                if STOP_ON_RATE_LIMIT and status_code == 429:
+                    print("\n[STOP] Rate limit hit (429). Stopping run early to preserve progress.")
+                    stopped_due_to_rate_limit = True
+                    break
+
             time.sleep(REQUEST_DELAY_SECONDS)
 
-    return success_count, failure_count
+    return success_count, failure_count, stopped_due_to_rate_limit
 
 
 def main():
@@ -213,7 +266,7 @@ def main():
     print(f"User ID: {source_user_id}")
 
     print("\nLoading non-follower candidates file...")
-    file_user, summary, candidates = load_candidates_file()
+    file_user, summary, original_candidates = load_candidates_file()
 
     print("\nCandidate file created for:")
     print(f"Name: {file_user.get('name')}")
@@ -225,14 +278,26 @@ def main():
             "Candidate file user ID does not match the currently authenticated user."
         )
 
-    users_to_process = preview_candidates(summary, candidates)
+    print("\nChecking prior logs for resume support...")
+    processed_ids = get_successfully_processed_user_ids()
+    remaining_candidates, skipped_count = filter_out_already_processed_candidates(
+        original_candidates,
+        processed_ids,
+    )
+
+    users_to_process = preview_candidates(
+        summary,
+        original_candidates,
+        remaining_candidates,
+        skipped_count,
+    )
 
     ensure_logs_dir()
     log_file_path = build_log_file_path()
 
     print(f"\nLog file will be written to: {log_file_path}")
 
-    success_count, failure_count = process_unfollows(
+    success_count, failure_count, stopped_due_to_rate_limit = process_unfollows(
         access_token,
         source_user_id,
         users_to_process,
@@ -248,6 +313,10 @@ def main():
         print("Mode: LIVE")
         print(f"Successfully unfollowed: {success_count}")
         print(f"Failed to unfollow: {failure_count}")
+
+        if stopped_due_to_rate_limit:
+            print("Run stopped early because of rate limiting.")
+            print("You can rerun later and resume from the remaining candidates.")
 
     print(f"Log saved to: {log_file_path}")
 
