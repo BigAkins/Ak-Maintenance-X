@@ -1,19 +1,20 @@
 import json
 import os
+
 import requests
 
-TOKEN_FILE = "token.json"
-OUTPUT_FILE = "non_follower_candidates.json"
-PROTECTED_ACCOUNTS_FILE = "protected_accounts.json"
+from cleanup_config import (
+    TOKEN_FILE,
+    PROTECTED_ACCOUNTS_FILE,
+    NON_FOLLOWER_CANDIDATES_FILE,
+    MAX_RESULTS_PER_PAGE,
+    DEFAULT_KEEP_USERNAMES,
+    DEFAULT_KEEP_USER_IDS,
+)
 
 ME_URL = "https://api.x.com/2/users/me"
 FOLLOWING_URL = "https://api.x.com/2/users/{user_id}/following"
 FOLLOWERS_URL = "https://api.x.com/2/users/{user_id}/followers"
-
-DEFAULT_KEEP_USERNAMES = {"akinooola"}
-DEFAULT_KEEP_USER_IDS = set()
-
-MAX_RESULTS_PER_PAGE = 1000
 
 
 def load_access_token():
@@ -193,10 +194,10 @@ def save_candidates(
         "eligible_candidates": candidates,
     }
 
-    with open(OUTPUT_FILE, "w", encoding="utf-8") as file:
+    with open(NON_FOLLOWER_CANDIDATES_FILE, "w", encoding="utf-8") as file:
         json.dump(output_data, file, indent=2)
 
-    print(f"\nSaved candidate file to: {OUTPUT_FILE}")
+    print(f"\nSaved candidate file to: {NON_FOLLOWER_CANDIDATES_FILE}")
 
 
 def preview_results(protected_users, candidates):

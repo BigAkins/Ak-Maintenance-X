@@ -12,6 +12,9 @@ MAX_USERS_TO_PROCESS_DEFAULT = 5
 MAX_TWEETS_TO_PROCESS_DEFAULT = 5
 STOP_ON_RATE_LIMIT_DEFAULT = True
 
+# Analysis settings
+MAX_RESULTS_PER_PAGE = 1000
+
 # Built-in fallback protected accounts
 DEFAULT_KEEP_USERNAMES = {"akinooola"}
 DEFAULT_KEEP_USER_IDS = set()
