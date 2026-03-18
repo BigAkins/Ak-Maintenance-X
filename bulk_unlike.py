@@ -6,16 +6,21 @@ from datetime import datetime
 
 import requests
 
-TOKEN_FILE = "token.json"
+from cleanup_config import (
+    TOKEN_FILE,
+    LOGS_DIR,
+    DRY_RUN_DEFAULT,
+    REQUEST_DELAY_SECONDS_DEFAULT,
+    MAX_TWEETS_TO_PROCESS_DEFAULT,
+)
+
 ME_URL = "https://api.x.com/2/users/me"
 LIKES_URL = "https://api.x.com/2/users/{user_id}/liked_tweets"
 UNLIKE_URL = "https://api.x.com/2/users/{user_id}/likes/{tweet_id}"
 
-DRY_RUN = True
-REQUEST_DELAY_SECONDS = 1.0
-MAX_TWEETS_TO_PROCESS = 5
-
-LOGS_DIR = "logs"
+DRY_RUN = DRY_RUN_DEFAULT
+REQUEST_DELAY_SECONDS = REQUEST_DELAY_SECONDS_DEFAULT
+MAX_TWEETS_TO_PROCESS = MAX_TWEETS_TO_PROCESS_DEFAULT
 
 
 def load_access_token():
