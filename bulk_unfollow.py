@@ -6,20 +6,57 @@ from datetime import datetime
 
 import requests
 
-TOKEN_FILE = "token.json"
+from cleanup_config import (
+    TOKEN_FILE,
+    LOGS_DIR,
+    PROTECTED_ACCOUNTS_FILE,
+    DRY_RUN_DEFAULT,
+    REQUEST_DELAY_SECONDS_DEFAULT,
+    MAX_USERS_TO_PROCESS_DEFAULT,
+    DEFAULT_KEEP_USERNAMES,
+    DEFAULT_KEEP_USER_IDS,
+)
+
 ME_URL = "https://api.x.com/2/users/me"
 FOLLOWING_URL = "https://api.x.com/2/users/{user_id}/following"
 UNFOLLOW_URL = "https://api.x.com/2/users/{source_user_id}/following/{target_user_id}"
 
-DRY_RUN = True
-REQUEST_DELAY_SECONDS = 1.0
-MAX_USERS_TO_PROCESS = 5
+DRY_RUN = DRY_RUN_DEFAULT
+REQUEST_DELAY_SECONDS = REQUEST_DELAY_SECONDS_DEFAULT
+MAX_USERS_TO_PROCESS = MAX_USERS_TO_PROCESS_DEFAULT
 
-LOGS_DIR = "logs"
 
-PROTECTED_ACCOUNTS_FILE = "protected_accounts.json"
-DEFAULT_KEEP_USERNAMES = {"akinooola"}
-DEFAULT_KEEP_USER_IDS = set()
+def load_access_token():
+    try:
+        with open(TOKEN_FILE, "r", encoding="utf-8") as file:
+            token_data = json.load(file)
+    except FileNotFoundError as exc:
+        raise FileNotFoundError(
+            "token.json not found. Run auth_test.py first to authenticate."
+        ) from exc
+
+    access_token = token_data.get("access_token")
+    if not access_token:
+        raise ValueError("No access_token found in token.json")
+
+    return access_token
+
+
+def make_headers(access_token):
+    return {
+        "Authorization": f"Bearer {access_token}",
+    }
+
+
+def get_profile(access_token):
+    response = requests.get(
+        ME_URL,
+        headers=make_headers(access_token),
+        timeout=30,
+    )
+    response.raise_for_status()
+    return response.json()["data"]
+
 
 def normalize_username(username):
     return username.strip().lower().lstrip("@")
@@ -55,38 +92,6 @@ def load_protected_accounts():
             "Using default built-in protected accounts only."
         )
         return keep_usernames, keep_user_ids
-
-
-def load_access_token():
-    try:
-        with open(TOKEN_FILE, "r", encoding="utf-8") as file:
-            token_data = json.load(file)
-    except FileNotFoundError as exc:
-        raise FileNotFoundError(
-            "token.json not found. Run auth_test.py first to authenticate."
-        ) from exc
-
-    access_token = token_data.get("access_token")
-    if not access_token:
-        raise ValueError("No access_token found in token.json")
-
-    return access_token
-
-
-def make_headers(access_token):
-    return {
-        "Authorization": f"Bearer {access_token}",
-    }
-
-
-def get_profile(access_token):
-    response = requests.get(
-        ME_URL,
-        headers=make_headers(access_token),
-        timeout=30,
-    )
-    response.raise_for_status()
-    return response.json()["data"]
 
 
 def get_following(access_token, user_id):
