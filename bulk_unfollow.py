@@ -15,12 +15,46 @@ DRY_RUN = True
 REQUEST_DELAY_SECONDS = 1.0
 MAX_USERS_TO_PROCESS = 5
 
-# Accounts you never want to unfollow
-KEEP_USERNAMES = {
-    "akinooola",
-}
-
 LOGS_DIR = "logs"
+
+PROTECTED_ACCOUNTS_FILE = "protected_accounts.json"
+DEFAULT_KEEP_USERNAMES = {"akinooola"}
+DEFAULT_KEEP_USER_IDS = set()
+
+def normalize_username(username):
+    return username.strip().lower().lstrip("@")
+
+
+def load_protected_accounts():
+    keep_usernames = {normalize_username(name) for name in DEFAULT_KEEP_USERNAMES}
+    keep_user_ids = {str(user_id).strip() for user_id in DEFAULT_KEEP_USER_IDS}
+
+    if not os.path.exists(PROTECTED_ACCOUNTS_FILE):
+        print(
+            f"[INFO] {PROTECTED_ACCOUNTS_FILE} not found. "
+            "Using default built-in protected accounts only."
+        )
+        return keep_usernames, keep_user_ids
+
+    try:
+        with open(PROTECTED_ACCOUNTS_FILE, "r", encoding="utf-8") as file:
+            data = json.load(file)
+
+        file_usernames = data.get("keep_usernames", [])
+        file_user_ids = data.get("keep_user_ids", [])
+
+        keep_usernames.update(normalize_username(name) for name in file_usernames)
+        keep_user_ids.update(str(user_id).strip() for user_id in file_user_ids)
+
+        print(f"[INFO] Loaded protected accounts from {PROTECTED_ACCOUNTS_FILE}")
+        return keep_usernames, keep_user_ids
+
+    except Exception as error:
+        print(
+            f"[WARNING] Could not read {PROTECTED_ACCOUNTS_FILE}: {error}. "
+            "Using default built-in protected accounts only."
+        )
+        return keep_usernames, keep_user_ids
 
 
 def load_access_token():
@@ -120,17 +154,18 @@ def log_result(csv_writer, target_user_id, username, name, status, details):
     )
 
 
-def is_protected_user(user):
-    username = user.get("username", "")
-    return username in KEEP_USERNAMES
+def is_protected_user(user, keep_usernames, keep_user_ids):
+    user_id = str(user.get("id", "")).strip()
+    username = normalize_username(user.get("username", ""))
+    return user_id in keep_user_ids or username in keep_usernames
 
 
-def filter_unfollow_candidates(users):
+def filter_unfollow_candidates(users, keep_usernames, keep_user_ids):
     protected_users = []
     unfollow_candidates = []
 
     for user in users:
-        if is_protected_user(user):
+        if is_protected_user(user, keep_usernames, keep_user_ids):
             protected_users.append(user)
         else:
             unfollow_candidates.append(user)
@@ -242,7 +277,14 @@ def main():
     print("\nFetching following list...")
     following = get_following(access_token, source_user_id)
 
-    protected_users, unfollow_candidates = filter_unfollow_candidates(following)
+    print("Loading protected accounts...")
+    keep_usernames, keep_user_ids = load_protected_accounts()
+
+    protected_users, unfollow_candidates = filter_unfollow_candidates(
+        following,
+        keep_usernames,
+        keep_user_ids,
+    )
 
     users_to_process = preview_users(
         following,
