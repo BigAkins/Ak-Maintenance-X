@@ -1,6 +1,4 @@
 import json
-import os
-
 import requests
 
 TOKEN_FILE = "token.json"
@@ -10,14 +8,18 @@ ME_URL = "https://api.x.com/2/users/me"
 FOLLOWING_URL = "https://api.x.com/2/users/{user_id}/following"
 FOLLOWERS_URL = "https://api.x.com/2/users/{user_id}/followers"
 
+# Keep public defaults minimal for GitHub
 KEEP_USERNAMES = {
     "Akinooola",
 }
 
 KEEP_USER_IDS = {
-    # Add exact protected IDs here if you want
+    # Add protected IDs locally if you want extra safety
     # "1509718054346788866",
+    # "4416456732",
 }
+
+MAX_RESULTS_PER_PAGE = 1000
 
 
 def load_access_token():
@@ -52,36 +54,6 @@ def get_profile(access_token):
     return response.json()["data"]
 
 
-def get_following(access_token, user_id):
-    url = FOLLOWING_URL.format(user_id=user_id)
-
-    response = requests.get(
-        url,
-        headers=make_headers(access_token),
-        timeout=30,
-        params={"max_results": 100},
-    )
-    response.raise_for_status()
-
-    data = response.json()
-    return data.get("data", [])
-
-
-def get_followers(access_token, user_id):
-    url = FOLLOWERS_URL.format(user_id=user_id)
-
-    response = requests.get(
-        url,
-        headers=make_headers(access_token),
-        timeout=30,
-        params={"max_results": 100},
-    )
-    response.raise_for_status()
-
-    data = response.json()
-    return data.get("data", [])
-
-
 def normalize_username(username):
     return username.strip().lower().lstrip("@")
 
@@ -91,6 +63,58 @@ def is_protected_user(user):
     username = normalize_username(user.get("username", ""))
 
     return user_id in KEEP_USER_IDS or username in KEEP_USERNAMES
+
+
+def fetch_all_users_from_paginated_endpoint(access_token, base_url):
+    all_users = []
+    next_token = None
+    page_number = 1
+
+    while True:
+        params = {
+            "max_results": MAX_RESULTS_PER_PAGE,
+        }
+
+        if next_token:
+            params["pagination_token"] = next_token
+
+        response = requests.get(
+            base_url,
+            headers=make_headers(access_token),
+            params=params,
+            timeout=30,
+        )
+        response.raise_for_status()
+
+        payload = response.json()
+        page_users = payload.get("data", [])
+        meta = payload.get("meta", {})
+
+        all_users.extend(page_users)
+
+        print(
+            f"Fetched page {page_number}: "
+            f"{len(page_users)} users "
+            f"(total so far: {len(all_users)})"
+        )
+
+        next_token = meta.get("next_token")
+        if not next_token:
+            break
+
+        page_number += 1
+
+    return all_users
+
+
+def get_all_following(access_token, user_id):
+    url = FOLLOWING_URL.format(user_id=user_id)
+    return fetch_all_users_from_paginated_endpoint(access_token, url)
+
+
+def get_all_followers(access_token, user_id):
+    url = FOLLOWERS_URL.format(user_id=user_id)
+    return fetch_all_users_from_paginated_endpoint(access_token, url)
 
 
 def get_non_followers(following, followers):
@@ -126,8 +150,8 @@ def save_candidates(profile, following, followers, non_followers, protected_user
             "username": profile.get("username"),
         },
         "summary": {
-            "following_count_on_page": len(following),
-            "followers_count_on_page": len(followers),
+            "following_count_total": len(following),
+            "followers_count_total": len(followers),
             "non_followers_found": len(non_followers),
             "protected_non_followers_skipped": len(protected_users),
             "eligible_candidates": len(candidates),
@@ -181,13 +205,13 @@ def main():
     print(f"Username: @{profile['username']}")
     print(f"User ID: {user_id}")
 
-    print("\nFetching following list...")
-    following = get_following(access_token, user_id)
+    print("\nFetching all following pages...")
+    following = get_all_following(access_token, user_id)
 
-    print("Fetching followers list...")
-    followers = get_followers(access_token, user_id)
+    print("\nFetching all followers pages...")
+    followers = get_all_followers(access_token, user_id)
 
-    print("\nComparing following vs followers...")
+    print("\nComparing full following vs full followers...")
     non_followers = get_non_followers(following, followers)
 
     print("Applying protected keep list...")
