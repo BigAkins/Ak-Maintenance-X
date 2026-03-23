@@ -9,6 +9,9 @@ WORKFLOW_NAMES = list_workflows()
 # Short aliases -> canonical workflow names
 WORKFLOW_ALIASES = {
     "me": "get-me",
+    "whoami": "get-me",
+    "inspect-account": "inspect",
+    "preview": "dry-run",
     "non-followers": "find-non-followers",
     "reposts": "find-reposts",
     "likes-by-date": "find-likes-by-date",
@@ -153,14 +156,12 @@ def build_parser():
 
     subparsers = parser.add_subparsers(dest="command", required=True)
 
-    # list command
     subparsers.add_parser(
         "list",
         help="List workflows and aliases",
         description="List all available workflows and aliases grouped by purpose.",
     )
 
-    # legacy run command
     run_parser = subparsers.add_parser(
         "run",
         help="Run a workflow by canonical name or alias",
@@ -173,7 +174,6 @@ def build_parser():
     )
     add_common_arguments(run_parser)
 
-    # direct canonical workflow commands
     for workflow_name in WORKFLOW_NAMES:
         workflow_parser = subparsers.add_parser(
             workflow_name,
@@ -183,7 +183,6 @@ def build_parser():
         add_common_arguments(workflow_parser)
         workflow_parser.set_defaults(workflow=workflow_name)
 
-    # alias commands
     for alias_name, canonical_name in WORKFLOW_ALIASES.items():
         alias_parser = subparsers.add_parser(
             alias_name,
@@ -194,6 +193,38 @@ def build_parser():
         alias_parser.set_defaults(workflow=alias_name)
 
     return parser
+
+
+def validate_args(parser, args):
+    conflicting_pairs = [
+        ("dry_run", "live", "--dry-run", "--live"),
+        ("stop_on_rate_limit", "no_stop_on_rate_limit", "--stop-on-rate-limit", "--no-stop-on-rate-limit"),
+        ("auto_wait_on_rate_limit", "no_auto_wait_on_rate_limit", "--auto-wait-on-rate-limit", "--no-auto-wait-on-rate-limit"),
+        ("exclude_reposts", "include_reposts", "--exclude-reposts", "--include-reposts"),
+        ("exclude_replies", "include_replies", "--exclude-replies", "--include-replies"),
+    ]
+
+    for left_attr, right_attr, left_flag, right_flag in conflicting_pairs:
+        if hasattr(args, left_attr) and hasattr(args, right_attr):
+            if getattr(args, left_attr) and getattr(args, right_attr):
+                parser.error(f"Cannot use {left_flag} and {right_flag} together.")
+
+    if hasattr(args, "limit") and args.limit is not None and args.limit <= 0:
+        parser.error("--limit must be greater than 0.")
+
+    if (
+        hasattr(args, "request_delay_seconds")
+        and args.request_delay_seconds is not None
+        and args.request_delay_seconds < 0
+    ):
+        parser.error("--request-delay-seconds must be 0 or greater.")
+
+    if (
+        hasattr(args, "max_rate_limit_retries")
+        and args.max_rate_limit_retries is not None
+        and args.max_rate_limit_retries < 0
+    ):
+        parser.error("--max-rate-limit-retries must be 0 or greater.")
 
 
 def build_workflow_kwargs(args, workflow_func):
@@ -295,6 +326,7 @@ def run_workflow(workflow_name, args):
 def main():
     parser = build_parser()
     args = parser.parse_args()
+    validate_args(parser, args)
 
     if args.command == "list":
         run_list_command()
