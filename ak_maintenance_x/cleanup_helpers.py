@@ -3,7 +3,7 @@ import os
 
 import requests
 
-from cleanup_config import (
+from ak_maintenance_x.cleanup_config import (
     TOKEN_FILE,
     PROTECTED_ACCOUNTS_FILE,
     DEFAULT_KEEP_USERNAMES,

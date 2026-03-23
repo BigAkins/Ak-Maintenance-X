@@ -1,6 +1,13 @@
 import requests
 
-from cleanup_helpers import (
+try:
+    from scripts._bootstrap import bootstrap_project_root
+except ModuleNotFoundError:
+    from _bootstrap import bootstrap_project_root
+
+bootstrap_project_root()
+
+from ak_maintenance_x.cleanup_helpers import (
     load_access_token,
     get_profile,
     make_headers,

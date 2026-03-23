@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 
 import requests
 
-from cleanup_config import (
+from ak_maintenance_x.cleanup_config import (
     AUTO_WAIT_ON_RATE_LIMIT_DEFAULT,
     RATE_LIMIT_RESET_BUFFER_SECONDS_DEFAULT,
 )

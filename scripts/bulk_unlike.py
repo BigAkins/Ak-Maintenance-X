@@ -5,7 +5,14 @@ from datetime import datetime
 
 import requests
 
-from cleanup_config import (
+try:
+    from scripts._bootstrap import bootstrap_project_root
+except ModuleNotFoundError:
+    from _bootstrap import bootstrap_project_root
+
+bootstrap_project_root()
+
+from ak_maintenance_x.cleanup_config import (
     LOGS_DIR,
     DRY_RUN_DEFAULT,
     REQUEST_DELAY_SECONDS_DEFAULT,
@@ -14,12 +21,12 @@ from cleanup_config import (
     AUTO_WAIT_ON_RATE_LIMIT_DEFAULT,
     MAX_RATE_LIMIT_RETRIES_DEFAULT,
 )
-from cleanup_helpers import (
+from ak_maintenance_x.cleanup_helpers import (
     load_access_token,
     get_profile,
     make_headers,
 )
-from cleanup_rate_limits import (
+from ak_maintenance_x.cleanup_rate_limits import (
     maybe_wait_from_success_response,
     handle_rate_limit_http_error,
 )
