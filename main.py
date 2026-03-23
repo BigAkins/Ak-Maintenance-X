@@ -1,6 +1,7 @@
 import argparse
 import inspect
 import json
+import sys
 
 from ak_maintenance_x.workflows import get_workflow, list_workflows
 
@@ -59,6 +60,20 @@ WORKFLOW_DESCRIPTIONS = {
     "bulk-unrepost": "Bulk unrepost from reviewed repost candidates.",
     "bulk-delete-posts": "Bulk delete from reviewed post-delete candidates.",
 }
+
+CLI_EXAMPLES = """
+Examples:
+  python main.py list
+  python main.py whoami
+  python main.py inspect-account
+  python main.py non-followers
+  python main.py reposts --start-time 2026-03-31T00:00:00Z --end-time 2026-04-03T00:00:00Z
+  python main.py likes-by-date --start-time 2026-03-31T00:00:00Z --end-time 2026-04-03T00:00:00Z
+  python main.py unrepost --dry-run --limit 1
+  python main.py delete-posts --dry-run --limit 5
+  python main.py run bulk-unrepost --live --limit 3
+  python main.py whoami --json
+""".strip()
 
 
 def resolve_workflow_name(name):
@@ -145,13 +160,19 @@ def add_common_arguments(parser):
         action="store_true",
         help="Force exclude_replies=False for workflows that support it",
     )
+    parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Print the final workflow result as JSON only",
+    )
 
 
 def build_parser():
     parser = argparse.ArgumentParser(
         prog="main.py",
         description="Ak Maintenance X command-line interface",
-        epilog="Use 'python main.py list' to view workflows and aliases.",
+        epilog=CLI_EXAMPLES,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
     )
 
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -166,6 +187,8 @@ def build_parser():
         "run",
         help="Run a workflow by canonical name or alias",
         description="Run a workflow by explicit canonical name or alias.",
+        epilog=CLI_EXAMPLES,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     run_parser.add_argument(
         "workflow",
@@ -179,6 +202,8 @@ def build_parser():
             workflow_name,
             help=WORKFLOW_DESCRIPTIONS.get(workflow_name, f"Run '{workflow_name}'"),
             description=WORKFLOW_DESCRIPTIONS.get(workflow_name, f"Run '{workflow_name}'"),
+            epilog=CLI_EXAMPLES,
+            formatter_class=argparse.RawDescriptionHelpFormatter,
         )
         add_common_arguments(workflow_parser)
         workflow_parser.set_defaults(workflow=workflow_name)
@@ -188,6 +213,8 @@ def build_parser():
             alias_name,
             help=f"Alias for '{canonical_name}'",
             description=f"Alias for '{canonical_name}': {WORKFLOW_DESCRIPTIONS.get(canonical_name, '')}",
+            epilog=CLI_EXAMPLES,
+            formatter_class=argparse.RawDescriptionHelpFormatter,
         )
         add_common_arguments(alias_parser)
         alias_parser.set_defaults(workflow=alias_name)
@@ -287,7 +314,29 @@ def build_workflow_kwargs(args, workflow_func):
     return kwargs
 
 
-def run_list_command():
+def emit_result(result, json_only=False):
+    if result is None:
+        return
+
+    rendered = json.dumps(result, indent=2, default=str)
+    if json_only:
+        print(rendered)
+    else:
+        print("\n--- WORKFLOW RESULT ---")
+        print(rendered)
+
+
+def run_list_command(json_only=False):
+    if json_only:
+        payload = {
+            "workflows": WORKFLOW_NAMES,
+            "aliases": WORKFLOW_ALIASES,
+            "groups": WORKFLOW_GROUPS,
+            "descriptions": WORKFLOW_DESCRIPTIONS,
+        }
+        print(json.dumps(payload, indent=2, default=str))
+        return
+
     print("Available workflows by group:\n")
 
     for group_name, workflows in WORKFLOW_GROUPS.items():
@@ -307,20 +356,18 @@ def run_workflow(workflow_name, args):
     workflow_func = get_workflow(canonical_name)
     kwargs = build_workflow_kwargs(args, workflow_func)
 
-    print(f"Running workflow: {canonical_name}")
-    if workflow_name != canonical_name:
-        print(f"Alias used: {workflow_name}")
+    if not args.json:
+        print(f"Running workflow: {canonical_name}")
+        if workflow_name != canonical_name:
+            print(f"Alias used: {workflow_name}")
 
-    if kwargs:
-        print("Overrides:")
-        for key, value in kwargs.items():
-            print(f"- {key} = {value}")
+        if kwargs:
+            print("Overrides:")
+            for key, value in kwargs.items():
+                print(f"- {key} = {value}")
 
     result = workflow_func(**kwargs)
-
-    if result is not None:
-        print("\n--- WORKFLOW RESULT ---")
-        print(json.dumps(result, indent=2, default=str))
+    emit_result(result, json_only=args.json)
 
 
 def main():
@@ -329,7 +376,7 @@ def main():
     validate_args(parser, args)
 
     if args.command == "list":
-        run_list_command()
+        run_list_command(json_only=getattr(args, "json", False))
         return
 
     if args.command == "run":
