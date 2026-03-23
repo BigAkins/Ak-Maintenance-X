@@ -1,5 +1,4 @@
 import csv
-import json
 import os
 import time
 from datetime import datetime
@@ -11,6 +10,7 @@ from cleanup_config import (
     DRY_RUN_DEFAULT,
     REQUEST_DELAY_SECONDS_DEFAULT,
     MAX_USERS_TO_PROCESS_DEFAULT,
+    MAX_RESULTS_PER_PAGE,
 )
 from cleanup_helpers import (
     load_access_token,
@@ -18,6 +18,7 @@ from cleanup_helpers import (
     load_protected_accounts,
     normalize_username,
     make_headers,
+    fetch_all_users_from_paginated_endpoint,
 )
 
 FOLLOWING_URL = "https://api.x.com/2/users/{user_id}/following"
@@ -28,19 +29,13 @@ REQUEST_DELAY_SECONDS = REQUEST_DELAY_SECONDS_DEFAULT
 MAX_USERS_TO_PROCESS = MAX_USERS_TO_PROCESS_DEFAULT
 
 
-def get_following(access_token, user_id):
+def get_all_following(access_token, user_id):
     url = FOLLOWING_URL.format(user_id=user_id)
-
-    response = requests.get(
+    return fetch_all_users_from_paginated_endpoint(
+        access_token,
         url,
-        headers=make_headers(access_token),
-        timeout=30,
-        params={"max_results": 100},
+        MAX_RESULTS_PER_PAGE,
     )
-    response.raise_for_status()
-
-    data = response.json()
-    return data.get("data", [])
 
 
 def unfollow_user(access_token, source_user_id, target_user_id):
@@ -114,7 +109,7 @@ def filter_unfollow_candidates(users, keep_usernames, keep_user_ids):
 
 def preview_users(all_users, protected_users, unfollow_candidates):
     print("\n--- BULK UNFOLLOW PREVIEW ---")
-    print(f"Found {len(all_users)} followed accounts on this page.")
+    print(f"Found {len(all_users)} followed accounts total.")
     print(f"Protected accounts found: {len(protected_users)}")
     print(f"Eligible unfollow candidates found: {len(unfollow_candidates)}")
     print(f"Configured to process up to {MAX_USERS_TO_PROCESS} accounts.")
@@ -213,8 +208,8 @@ def main():
     print(f"Username: @{profile['username']}")
     print(f"User ID: {source_user_id}")
 
-    print("\nFetching following list...")
-    following = get_following(access_token, source_user_id)
+    print("\nFetching all following pages...")
+    following = get_all_following(access_token, source_user_id)
 
     print("Loading protected accounts...")
     keep_usernames, keep_user_ids = load_protected_accounts()

@@ -12,7 +12,7 @@ MAX_USERS_TO_PROCESS_DEFAULT = 5
 MAX_TWEETS_TO_PROCESS_DEFAULT = 5
 STOP_ON_RATE_LIMIT_DEFAULT = True
 
-# Analysis settings
+# Analysis / pagination settings
 MAX_RESULTS_PER_PAGE = 1000
 
 # Built-in fallback protected accounts

@@ -79,3 +79,49 @@ def load_protected_accounts():
             "Using default built-in protected accounts only."
         )
         return keep_usernames, keep_user_ids
+
+
+def fetch_all_users_from_paginated_endpoint(
+    access_token,
+    base_url,
+    max_results_per_page,
+):
+    all_users = []
+    next_token = None
+    page_number = 1
+
+    while True:
+        params = {
+            "max_results": max_results_per_page,
+        }
+
+        if next_token:
+            params["pagination_token"] = next_token
+
+        response = requests.get(
+            base_url,
+            headers=make_headers(access_token),
+            params=params,
+            timeout=30,
+        )
+        response.raise_for_status()
+
+        payload = response.json()
+        page_users = payload.get("data", [])
+        meta = payload.get("meta", {})
+
+        all_users.extend(page_users)
+
+        print(
+            f"Fetched page {page_number}: "
+            f"{len(page_users)} users "
+            f"(total so far: {len(all_users)})"
+        )
+
+        next_token = meta.get("next_token")
+        if not next_token:
+            break
+
+        page_number += 1
+
+    return all_users

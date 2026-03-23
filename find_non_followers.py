@@ -1,7 +1,5 @@
 import json
 
-import requests
-
 from cleanup_config import (
     NON_FOLLOWER_CANDIDATES_FILE,
     MAX_RESULTS_PER_PAGE,
@@ -11,7 +9,7 @@ from cleanup_helpers import (
     get_profile,
     load_protected_accounts,
     normalize_username,
-    make_headers,
+    fetch_all_users_from_paginated_endpoint,
 )
 
 FOLLOWING_URL = "https://api.x.com/2/users/{user_id}/following"
@@ -25,56 +23,22 @@ def is_protected_user(user, keep_usernames, keep_user_ids):
     return user_id in keep_user_ids or username in keep_usernames
 
 
-def fetch_all_users_from_paginated_endpoint(access_token, base_url):
-    all_users = []
-    next_token = None
-    page_number = 1
-
-    while True:
-        params = {
-            "max_results": MAX_RESULTS_PER_PAGE,
-        }
-
-        if next_token:
-            params["pagination_token"] = next_token
-
-        response = requests.get(
-            base_url,
-            headers=make_headers(access_token),
-            params=params,
-            timeout=30,
-        )
-        response.raise_for_status()
-
-        payload = response.json()
-        page_users = payload.get("data", [])
-        meta = payload.get("meta", {})
-
-        all_users.extend(page_users)
-
-        print(
-            f"Fetched page {page_number}: "
-            f"{len(page_users)} users "
-            f"(total so far: {len(all_users)})"
-        )
-
-        next_token = meta.get("next_token")
-        if not next_token:
-            break
-
-        page_number += 1
-
-    return all_users
-
-
 def get_all_following(access_token, user_id):
     url = FOLLOWING_URL.format(user_id=user_id)
-    return fetch_all_users_from_paginated_endpoint(access_token, url)
+    return fetch_all_users_from_paginated_endpoint(
+        access_token,
+        url,
+        MAX_RESULTS_PER_PAGE,
+    )
 
 
 def get_all_followers(access_token, user_id):
     url = FOLLOWERS_URL.format(user_id=user_id)
-    return fetch_all_users_from_paginated_endpoint(access_token, url)
+    return fetch_all_users_from_paginated_endpoint(
+        access_token,
+        url,
+        MAX_RESULTS_PER_PAGE,
+    )
 
 
 def get_non_followers(following, followers):
