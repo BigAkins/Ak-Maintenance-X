@@ -1,7 +1,9 @@
+# PYTHON_ARGCOMPLETE_OK
 import argparse
 import inspect
 import json
 import sys
+import argcomplete
 
 from ak_maintenance_x.workflows import get_workflow, list_workflows
 
@@ -177,11 +179,14 @@ def build_parser():
 
     subparsers = parser.add_subparsers(dest="command", required=True)
 
-    subparsers.add_parser(
+    list_parser = subparsers.add_parser(
         "list",
         help="List workflows and aliases",
         description="List all available workflows and aliases grouped by purpose.",
+        epilog=CLI_EXAMPLES,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
     )
+    add_common_arguments(list_parser)
 
     run_parser = subparsers.add_parser(
         "run",
@@ -372,6 +377,7 @@ def run_workflow(workflow_name, args):
 
 def main():
     parser = build_parser()
+    argcomplete.autocomplete(parser)
     args = parser.parse_args()
     validate_args(parser, args)
 
