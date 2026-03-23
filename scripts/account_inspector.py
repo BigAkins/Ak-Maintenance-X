@@ -48,7 +48,7 @@ def get_following(access_token, user_id):
 
 
 def run_account_inspector(likes_preview_limit=5, following_preview_limit=5):
-    """Fetch the authenticated profile plus a preview of likes and following."""
+    """Inspect the account and return a summary dict for the current page."""
     print("Loading access token...")
     access_token = load_access_token()
 
@@ -77,10 +77,18 @@ def run_account_inspector(likes_preview_limit=5, following_preview_limit=5):
 
     print("\nInspection complete.")
 
+    summary = {
+        "liked_tweets_found": len(likes),
+        "following_found": len(following),
+        "likes_preview_limit": likes_preview_limit,
+        "following_preview_limit": following_preview_limit,
+    }
+
     return {
         "profile": profile,
-        "likes": likes,
-        "following": following,
+        "likes_preview": likes[:likes_preview_limit],
+        "following_preview": following[:following_preview_limit],
+        "summary": summary,
     }
 
 

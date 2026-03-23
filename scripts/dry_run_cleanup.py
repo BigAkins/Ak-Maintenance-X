@@ -88,7 +88,7 @@ def run_dry_run_cleanup(
     max_likes_preview=MAX_LIKES_PREVIEW,
     max_following_preview=MAX_FOLLOWING_PREVIEW,
 ):
-    """Preview the current likes and following page without making changes."""
+    """Preview cleanup targets and return a dry-run summary dict."""
     print("Loading access token...")
     access_token = load_access_token()
 
@@ -116,12 +116,17 @@ def run_dry_run_cleanup(
     print("\nDry run complete.")
     print("No changes were made to your account.")
 
+    summary = {
+        "liked_tweets_found": len(likes),
+        "following_found": len(following),
+        "likes_previewed": min(len(likes), max_likes_preview),
+        "following_previewed": min(len(following), max_following_preview),
+    }
+
     return {
         "profile": profile,
-        "likes": likes,
-        "following": following,
-        "likes_preview_count": min(len(likes), max_likes_preview),
-        "following_preview_count": min(len(following), max_following_preview),
+        "mode": "DRY RUN",
+        "summary": summary,
     }
 
 

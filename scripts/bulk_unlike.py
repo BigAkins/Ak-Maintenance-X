@@ -104,8 +104,8 @@ def log_result(csv_writer, tweet_id, tweet_text, status, details):
 
 def preview_tweets(
     tweets,
-    limit=MAX_TWEETS_TO_PROCESS,
-    dry_run=DRY_RUN,
+    limit=MAX_TWEETS_TO_PROCESS_DEFAULT,
+    dry_run=DRY_RUN_DEFAULT,
 ):
     print("\n--- BULK UNLIKE PREVIEW ---")
     print(f"Found {len(tweets)} liked tweets on this page.")
@@ -132,11 +132,11 @@ def process_unlikes(
     user_id,
     tweets_to_process,
     log_file_path,
-    dry_run=DRY_RUN,
-    request_delay_seconds=REQUEST_DELAY_SECONDS,
-    stop_on_rate_limit=STOP_ON_RATE_LIMIT,
-    auto_wait_on_rate_limit=AUTO_WAIT_ON_RATE_LIMIT,
-    max_rate_limit_retries=MAX_RATE_LIMIT_RETRIES,
+    dry_run=DRY_RUN_DEFAULT,
+    request_delay_seconds=REQUEST_DELAY_SECONDS_DEFAULT,
+    stop_on_rate_limit=STOP_ON_RATE_LIMIT_DEFAULT,
+    auto_wait_on_rate_limit=AUTO_WAIT_ON_RATE_LIMIT_DEFAULT,
+    max_rate_limit_retries=MAX_RATE_LIMIT_RETRIES_DEFAULT,
 ):
     success_count = 0
     failure_count = 0
@@ -221,14 +221,14 @@ def process_unlikes(
 
 
 def run_bulk_unlike(
-    dry_run=DRY_RUN,
-    limit=MAX_TWEETS_TO_PROCESS,
-    request_delay_seconds=REQUEST_DELAY_SECONDS,
-    stop_on_rate_limit=STOP_ON_RATE_LIMIT,
-    auto_wait_on_rate_limit=AUTO_WAIT_ON_RATE_LIMIT,
-    max_rate_limit_retries=MAX_RATE_LIMIT_RETRIES,
+    dry_run=DRY_RUN_DEFAULT,
+    limit=MAX_TWEETS_TO_PROCESS_DEFAULT,
+    request_delay_seconds=REQUEST_DELAY_SECONDS_DEFAULT,
+    stop_on_rate_limit=STOP_ON_RATE_LIMIT_DEFAULT,
+    auto_wait_on_rate_limit=AUTO_WAIT_ON_RATE_LIMIT_DEFAULT,
+    max_rate_limit_retries=MAX_RATE_LIMIT_RETRIES_DEFAULT,
 ):
-    """Preview or unlike the current page of liked tweets for the authenticated user."""
+    """Execute the bulk-unlike workflow and return a summary dict."""
     print("Loading access token...")
     access_token = load_access_token()
 
@@ -281,15 +281,27 @@ def run_bulk_unlike(
 
     print(f"Log saved to: {log_file_path}")
 
+    summary = {
+        "liked_tweets_found": len(liked_tweets),
+        "selected_for_processing": len(tweets_to_process),
+        "request_delay_seconds": request_delay_seconds,
+        "stop_on_rate_limit": stop_on_rate_limit,
+        "auto_wait_on_rate_limit": auto_wait_on_rate_limit,
+        "max_rate_limit_retries": max_rate_limit_retries,
+    }
+
     return {
         "profile": profile,
-        "liked_tweets_count": len(liked_tweets),
-        "tweets_selected_count": len(tweets_to_process),
+        "mode": "DRY RUN" if dry_run else "LIVE",
+        "processed": len(tweets_to_process),
+        "success": success_count,
+        "failed": failure_count,
         "dry_run": dry_run,
         "success_count": success_count,
         "failure_count": failure_count,
         "stopped_due_to_rate_limit": stopped_due_to_rate_limit,
         "log_file_path": log_file_path,
+        "summary": summary,
     }
 
 

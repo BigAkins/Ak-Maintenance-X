@@ -103,7 +103,7 @@ def save_repost_candidates(profile, posts, repost_candidates, start_time, end_ti
 
 
 def run_find_reposts(start_time=START_TIME, end_time=END_TIME):
-    """Find repost candidates in a date window and save them for later review."""
+    """Find repost candidates and return a saved-candidate summary dict."""
     print("Loading access token...")
     access_token = load_access_token()
 
@@ -144,12 +144,18 @@ def run_find_reposts(start_time=START_TIME, end_time=END_TIME):
     print("\nAnalysis complete.")
     print("No account changes were made.")
 
-    return {
-        "profile": profile,
-        "posts_count": len(posts),
-        "repost_candidates_count": len(repost_candidates),
+    summary = {
+        "timeline_posts_found": len(posts),
+        "repost_candidates_found": len(repost_candidates),
         "start_time": start_time,
         "end_time": end_time,
+    }
+
+    return {
+        "profile": profile,
+        "output_file": REPOST_CANDIDATES_FILE,
+        "candidate_count": len(repost_candidates),
+        "summary": summary,
     }
 
 

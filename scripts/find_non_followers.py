@@ -131,7 +131,7 @@ def preview_results(protected_users, candidates):
 
 
 def run_find_non_followers():
-    """Analyze following vs followers and save eligible non-follower candidates."""
+    """Analyze non-followers and return a saved-candidate summary dict."""
     print("Loading access token...")
     access_token = load_access_token()
 
@@ -177,13 +177,19 @@ def run_find_non_followers():
     print("\nAnalysis complete.")
     print("No account changes were made.")
 
+    summary = {
+        "following_count_total": len(following),
+        "followers_count_total": len(followers),
+        "non_followers_found": len(non_followers),
+        "protected_non_followers_skipped": len(protected_users),
+        "eligible_candidates": len(candidates),
+    }
+
     return {
         "profile": profile,
-        "following_count": len(following),
-        "followers_count": len(followers),
-        "non_followers_count": len(non_followers),
-        "protected_users_count": len(protected_users),
-        "candidates_count": len(candidates),
+        "output_file": NON_FOLLOWER_CANDIDATES_FILE,
+        "candidate_count": len(candidates),
+        "summary": summary,
     }
 
 

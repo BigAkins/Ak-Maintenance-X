@@ -98,7 +98,7 @@ def save_post_candidates(profile, posts, candidates, start_time, end_time):
 
 
 def run_find_posts_by_date(start_time=START_TIME, end_time=END_TIME):
-    """Find post-delete candidates in a date window and save them for review."""
+    """Find post-delete candidates and return a saved-candidate summary dict."""
     print("Loading access token...")
     access_token = load_access_token()
 
@@ -140,12 +140,19 @@ def run_find_posts_by_date(start_time=START_TIME, end_time=END_TIME):
     print("\nAnalysis complete.")
     print("No account changes were made.")
 
-    return {
-        "profile": profile,
-        "posts_count": len(posts),
-        "post_delete_candidates_count": len(candidates),
+    summary = {
+        "timeline_posts_found": len(posts),
+        "post_delete_candidates_found": len(candidates),
         "start_time": start_time,
         "end_time": end_time,
+        "note": "Filtered from the authenticated user's own timeline within the provided date range.",
+    }
+
+    return {
+        "profile": profile,
+        "output_file": POST_DELETE_CANDIDATES_FILE,
+        "candidate_count": len(candidates),
+        "summary": summary,
     }
 
 

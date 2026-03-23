@@ -128,8 +128,8 @@ def preview_users(
     all_users,
     protected_users,
     unfollow_candidates,
-    limit=MAX_USERS_TO_PROCESS,
-    dry_run=DRY_RUN,
+    limit=MAX_USERS_TO_PROCESS_DEFAULT,
+    dry_run=DRY_RUN_DEFAULT,
 ):
     print("\n--- BULK UNFOLLOW PREVIEW ---")
     print(f"Found {len(all_users)} followed accounts total.")
@@ -169,11 +169,11 @@ def process_unfollows(
     source_user_id,
     users_to_process,
     log_file_path,
-    dry_run=DRY_RUN,
-    request_delay_seconds=REQUEST_DELAY_SECONDS,
-    stop_on_rate_limit=STOP_ON_RATE_LIMIT,
-    auto_wait_on_rate_limit=AUTO_WAIT_ON_RATE_LIMIT,
-    max_rate_limit_retries=MAX_RATE_LIMIT_RETRIES,
+    dry_run=DRY_RUN_DEFAULT,
+    request_delay_seconds=REQUEST_DELAY_SECONDS_DEFAULT,
+    stop_on_rate_limit=STOP_ON_RATE_LIMIT_DEFAULT,
+    auto_wait_on_rate_limit=AUTO_WAIT_ON_RATE_LIMIT_DEFAULT,
+    max_rate_limit_retries=MAX_RATE_LIMIT_RETRIES_DEFAULT,
 ):
     success_count = 0
     failure_count = 0
@@ -262,14 +262,14 @@ def process_unfollows(
 
 
 def run_bulk_unfollow(
-    dry_run=DRY_RUN,
-    limit=MAX_USERS_TO_PROCESS,
-    request_delay_seconds=REQUEST_DELAY_SECONDS,
-    stop_on_rate_limit=STOP_ON_RATE_LIMIT,
-    auto_wait_on_rate_limit=AUTO_WAIT_ON_RATE_LIMIT,
-    max_rate_limit_retries=MAX_RATE_LIMIT_RETRIES,
+    dry_run=DRY_RUN_DEFAULT,
+    limit=MAX_USERS_TO_PROCESS_DEFAULT,
+    request_delay_seconds=REQUEST_DELAY_SECONDS_DEFAULT,
+    stop_on_rate_limit=STOP_ON_RATE_LIMIT_DEFAULT,
+    auto_wait_on_rate_limit=AUTO_WAIT_ON_RATE_LIMIT_DEFAULT,
+    max_rate_limit_retries=MAX_RATE_LIMIT_RETRIES_DEFAULT,
 ):
-    """Preview or unfollow eligible accounts from the current following list."""
+    """Execute the bulk-unfollow workflow and return a summary dict."""
     print("Loading access token...")
     access_token = load_access_token()
 
@@ -333,17 +333,29 @@ def run_bulk_unfollow(
 
     print(f"Log saved to: {log_file_path}")
 
+    summary = {
+        "following_found": len(following),
+        "protected_accounts_skipped": len(protected_users),
+        "eligible_candidates": len(unfollow_candidates),
+        "selected_for_processing": len(users_to_process),
+        "request_delay_seconds": request_delay_seconds,
+        "stop_on_rate_limit": stop_on_rate_limit,
+        "auto_wait_on_rate_limit": auto_wait_on_rate_limit,
+        "max_rate_limit_retries": max_rate_limit_retries,
+    }
+
     return {
         "profile": profile,
-        "following_count": len(following),
-        "protected_users_count": len(protected_users),
-        "unfollow_candidates_count": len(unfollow_candidates),
-        "users_selected_count": len(users_to_process),
+        "mode": "DRY RUN" if dry_run else "LIVE",
+        "processed": len(users_to_process),
+        "success": success_count,
+        "failed": failure_count,
         "dry_run": dry_run,
         "success_count": success_count,
         "failure_count": failure_count,
         "stopped_due_to_rate_limit": stopped_due_to_rate_limit,
         "log_file_path": log_file_path,
+        "summary": summary,
     }
 
 
