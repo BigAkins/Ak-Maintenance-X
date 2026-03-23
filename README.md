@@ -54,7 +54,7 @@ For a deeper breakdown, see `PROJECT_ARCHITECTURE.md`.
 ## Project Structure
 
 ```
-ak_maintenance_x/
+Ak-Maintenance-X/
 │
 ├── ak_maintenance_x/      # Core package (helpers, config, rate limits, workflows)
 ├── scripts/               # Individual workflow scripts
