@@ -7,3 +7,6 @@ logs/
 token.json
 non_follower_candidates.json
 protected_accounts.json
+repost_candidates.json
+like_candidates.json
+post_delete_candidates.json
