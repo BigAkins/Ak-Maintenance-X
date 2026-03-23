@@ -13,11 +13,17 @@ from cleanup_config import (
     REQUEST_DELAY_SECONDS_DEFAULT,
     MAX_TWEETS_TO_PROCESS_DEFAULT,
     STOP_ON_RATE_LIMIT_DEFAULT,
+    AUTO_WAIT_ON_RATE_LIMIT_DEFAULT,
+    MAX_RATE_LIMIT_RETRIES_DEFAULT,
 )
 from cleanup_helpers import (
     load_access_token,
     get_profile,
     make_headers,
+)
+from cleanup_rate_limits import (
+    maybe_wait_from_success_response,
+    handle_rate_limit_http_error,
 )
 
 UNREPOST_URL = "https://api.x.com/2/users/{user_id}/retweets/{source_tweet_id}"
@@ -26,6 +32,8 @@ DRY_RUN = DRY_RUN_DEFAULT
 REQUEST_DELAY_SECONDS = REQUEST_DELAY_SECONDS_DEFAULT
 MAX_TWEETS_TO_PROCESS = MAX_TWEETS_TO_PROCESS_DEFAULT
 STOP_ON_RATE_LIMIT = STOP_ON_RATE_LIMIT_DEFAULT
+AUTO_WAIT_ON_RATE_LIMIT = AUTO_WAIT_ON_RATE_LIMIT_DEFAULT
+MAX_RATE_LIMIT_RETRIES = MAX_RATE_LIMIT_RETRIES_DEFAULT
 
 LOG_FILE_PREFIX = "bulk_unrepost_log_"
 
@@ -58,7 +66,7 @@ def unrepost_tweet(access_token, user_id, source_tweet_id):
         timeout=30,
     )
     response.raise_for_status()
-    return response.json()
+    return response
 
 
 def ensure_logs_dir():
@@ -192,38 +200,60 @@ def process_unreposts(access_token, user_id, candidates_to_process, log_file_pat
                 )
                 continue
 
-            try:
-                result = unrepost_tweet(access_token, user_id, source_tweet_id)
-                print(f"[SUCCESS] Unreposted source tweet {source_tweet_id}: {result}")
-                log_result(
-                    csv_writer,
-                    repost_tweet_id,
-                    source_tweet_id,
-                    created_at,
-                    "SUCCESS",
-                    str(result),
-                )
-                success_count += 1
+            retry_count = 0
 
-            except requests.HTTPError as error:
-                status_code = None
-                if error.response is not None:
-                    status_code = error.response.status_code
+            while True:
+                try:
+                    response = unrepost_tweet(access_token, user_id, source_tweet_id)
+                    result = response.json()
 
-                print(f"[FAILED] Could not unrepost source tweet {source_tweet_id}: {error}")
-                log_result(
-                    csv_writer,
-                    repost_tweet_id,
-                    source_tweet_id,
-                    created_at,
-                    "FAILED",
-                    str(error),
-                )
-                failure_count += 1
+                    print(f"[SUCCESS] Unreposted source tweet {source_tweet_id}: {result}")
+                    log_result(
+                        csv_writer,
+                        repost_tweet_id,
+                        source_tweet_id,
+                        created_at,
+                        "SUCCESS",
+                        str(result),
+                    )
+                    success_count += 1
 
-                if STOP_ON_RATE_LIMIT and status_code == 429:
-                    print("\n[STOP] Rate limit hit (429). Stopping run early to preserve progress.")
-                    stopped_due_to_rate_limit = True
+                    maybe_wait_from_success_response(
+                        response,
+                        action_label=f"bulk_unrepost source tweet {source_tweet_id}",
+                        auto_wait=AUTO_WAIT_ON_RATE_LIMIT,
+                    )
+                    break
+
+                except requests.HTTPError as error:
+                    print(f"[FAILED] Could not unrepost source tweet {source_tweet_id}: {error}")
+
+                    waited = handle_rate_limit_http_error(
+                        error,
+                        action_label=f"bulk_unrepost source tweet {source_tweet_id}",
+                        auto_wait=AUTO_WAIT_ON_RATE_LIMIT,
+                    )
+
+                    if waited and retry_count < MAX_RATE_LIMIT_RETRIES:
+                        retry_count += 1
+                        print(f"[RETRY] Retrying unrepost for source tweet {source_tweet_id} after rate-limit wait...")
+                        continue
+
+                    log_result(
+                        csv_writer,
+                        repost_tweet_id,
+                        source_tweet_id,
+                        created_at,
+                        "FAILED",
+                        str(error),
+                    )
+                    failure_count += 1
+
+                    if error.response is not None and error.response.status_code == 429:
+                        stopped_due_to_rate_limit = True
+                        if STOP_ON_RATE_LIMIT:
+                            print("\n[STOP] Rate limit persisted. Stopping run early.")
+                            return success_count, failure_count, stopped_due_to_rate_limit
                     break
 
             time.sleep(REQUEST_DELAY_SECONDS)
