@@ -149,19 +149,26 @@ def filter_out_already_processed_candidates(candidates, processed_source_tweet_i
     return remaining_candidates, skipped_count
 
 
-def preview_candidates(summary, original_candidates, remaining_candidates, skipped_count):
+def preview_candidates(
+    summary,
+    original_candidates,
+    remaining_candidates,
+    skipped_count,
+    limit=MAX_TWEETS_TO_PROCESS,
+    dry_run=DRY_RUN,
+):
     print("\n--- BULK UNREPOST PREVIEW ---")
     print(f"Eligible repost candidates in file: {len(original_candidates)}")
     print(f"Already successfully processed from logs: {skipped_count}")
     print(f"Remaining candidates after resume filter: {len(remaining_candidates)}")
-    print(f"Configured to process up to {MAX_TWEETS_TO_PROCESS} reposts.")
+    print(f"Configured to process up to {limit} reposts.")
 
     if summary:
         print("\nCandidate file summary:")
         for key, value in summary.items():
             print(f"- {key}: {value}")
 
-    candidates_to_process = remaining_candidates[:MAX_TWEETS_TO_PROCESS]
+    candidates_to_process = remaining_candidates[:limit]
 
     if not candidates_to_process:
         print("\nNo remaining repost candidates found to process.")
@@ -175,13 +182,23 @@ def preview_candidates(summary, original_candidates, remaining_candidates, skipp
             f"created_at={candidate.get('created_at')}"
         )
 
-    if DRY_RUN:
+    if dry_run:
         print("\nDRY_RUN is ON. No reposts will actually be removed.")
 
     return candidates_to_process
 
 
-def process_unreposts(access_token, user_id, candidates_to_process, log_file_path):
+def process_unreposts(
+    access_token,
+    user_id,
+    candidates_to_process,
+    log_file_path,
+    dry_run=DRY_RUN,
+    request_delay_seconds=REQUEST_DELAY_SECONDS,
+    stop_on_rate_limit=STOP_ON_RATE_LIMIT,
+    auto_wait_on_rate_limit=AUTO_WAIT_ON_RATE_LIMIT,
+    max_rate_limit_retries=MAX_RATE_LIMIT_RETRIES,
+):
     success_count = 0
     failure_count = 0
     stopped_due_to_rate_limit = False
@@ -195,7 +212,7 @@ def process_unreposts(access_token, user_id, candidates_to_process, log_file_pat
             source_tweet_id = candidate.get("referenced_tweet_id", "unknown_source_id")
             created_at = candidate.get("created_at", "")
 
-            if DRY_RUN:
+            if dry_run:
                 print(f"[DRY RUN] Would unrepost source tweet {source_tweet_id}")
                 log_result(
                     csv_writer,
@@ -228,7 +245,7 @@ def process_unreposts(access_token, user_id, candidates_to_process, log_file_pat
                     maybe_wait_from_success_response(
                         response,
                         action_label=f"bulk_unrepost source tweet {source_tweet_id}",
-                        auto_wait=AUTO_WAIT_ON_RATE_LIMIT,
+                        auto_wait=auto_wait_on_rate_limit,
                     )
                     break
 
@@ -238,10 +255,10 @@ def process_unreposts(access_token, user_id, candidates_to_process, log_file_pat
                     waited = handle_rate_limit_http_error(
                         error,
                         action_label=f"bulk_unrepost source tweet {source_tweet_id}",
-                        auto_wait=AUTO_WAIT_ON_RATE_LIMIT,
+                        auto_wait=auto_wait_on_rate_limit,
                     )
 
-                    if waited and retry_count < MAX_RATE_LIMIT_RETRIES:
+                    if waited and retry_count < max_rate_limit_retries:
                         retry_count += 1
                         print(f"[RETRY] Retrying unrepost for source tweet {source_tweet_id} after rate-limit wait...")
                         continue
@@ -258,17 +275,25 @@ def process_unreposts(access_token, user_id, candidates_to_process, log_file_pat
 
                     if error.response is not None and error.response.status_code == 429:
                         stopped_due_to_rate_limit = True
-                        if STOP_ON_RATE_LIMIT:
+                        if stop_on_rate_limit:
                             print("\n[STOP] Rate limit persisted. Stopping run early.")
                             return success_count, failure_count, stopped_due_to_rate_limit
                     break
 
-            time.sleep(REQUEST_DELAY_SECONDS)
+            time.sleep(request_delay_seconds)
 
     return success_count, failure_count, stopped_due_to_rate_limit
 
 
-def main():
+def run_bulk_unrepost(
+    dry_run=DRY_RUN,
+    limit=MAX_TWEETS_TO_PROCESS,
+    request_delay_seconds=REQUEST_DELAY_SECONDS,
+    stop_on_rate_limit=STOP_ON_RATE_LIMIT,
+    auto_wait_on_rate_limit=AUTO_WAIT_ON_RATE_LIMIT,
+    max_rate_limit_retries=MAX_RATE_LIMIT_RETRIES,
+):
+    """Preview or unrepost saved repost candidates with resume support."""
     print("Loading access token...")
     access_token = load_access_token()
 
@@ -306,6 +331,8 @@ def main():
         original_candidates,
         remaining_candidates,
         skipped_count,
+        limit=limit,
+        dry_run=dry_run,
     )
 
     ensure_logs_dir()
@@ -318,10 +345,15 @@ def main():
         user_id,
         candidates_to_process,
         log_file_path,
+        dry_run=dry_run,
+        request_delay_seconds=request_delay_seconds,
+        stop_on_rate_limit=stop_on_rate_limit,
+        auto_wait_on_rate_limit=auto_wait_on_rate_limit,
+        max_rate_limit_retries=max_rate_limit_retries,
     )
 
     print("\n--- BULK UNREPOST SUMMARY ---")
-    if DRY_RUN:
+    if dry_run:
         print("Mode: DRY RUN")
         print(f"Previewed {len(candidates_to_process)} repost candidates.")
         print("No changes were made.")
@@ -335,6 +367,23 @@ def main():
             print("You can rerun later and resume from the remaining candidates.")
 
     print(f"Log saved to: {log_file_path}")
+
+    return {
+        "profile": live_profile,
+        "original_candidates_count": len(original_candidates),
+        "remaining_candidates_count": len(remaining_candidates),
+        "candidates_selected_count": len(candidates_to_process),
+        "skipped_count": skipped_count,
+        "dry_run": dry_run,
+        "success_count": success_count,
+        "failure_count": failure_count,
+        "stopped_due_to_rate_limit": stopped_due_to_rate_limit,
+        "log_file_path": log_file_path,
+    }
+
+
+def main():
+    run_bulk_unrepost()
 
 
 if __name__ == "__main__":

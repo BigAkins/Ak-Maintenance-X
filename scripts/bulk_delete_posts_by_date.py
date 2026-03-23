@@ -144,19 +144,26 @@ def filter_out_already_processed_candidates(candidates, processed_tweet_ids):
     return remaining_candidates, skipped_count
 
 
-def preview_candidates(summary, original_candidates, remaining_candidates, skipped_count):
+def preview_candidates(
+    summary,
+    original_candidates,
+    remaining_candidates,
+    skipped_count,
+    limit=MAX_TWEETS_TO_PROCESS,
+    dry_run=DRY_RUN,
+):
     print("\n--- BULK DELETE POSTS PREVIEW ---")
     print(f"Eligible delete candidates in file: {len(original_candidates)}")
     print(f"Already successfully processed from logs: {skipped_count}")
     print(f"Remaining candidates after resume filter: {len(remaining_candidates)}")
-    print(f"Configured to process up to {MAX_TWEETS_TO_PROCESS} posts.")
+    print(f"Configured to process up to {limit} posts.")
 
     if summary:
         print("\nCandidate file summary:")
         for key, value in summary.items():
             print(f"- {key}: {value}")
 
-    candidates_to_process = remaining_candidates[:MAX_TWEETS_TO_PROCESS]
+    candidates_to_process = remaining_candidates[:limit]
 
     if not candidates_to_process:
         print("\nNo remaining post delete candidates found to process.")
@@ -170,13 +177,22 @@ def preview_candidates(summary, original_candidates, remaining_candidates, skipp
             f"text={candidate.get('text', '')[:80]}"
         )
 
-    if DRY_RUN:
+    if dry_run:
         print("\nDRY_RUN is ON. No posts will actually be deleted.")
 
     return candidates_to_process
 
 
-def process_deletes(access_token, candidates_to_process, log_file_path):
+def process_deletes(
+    access_token,
+    candidates_to_process,
+    log_file_path,
+    dry_run=DRY_RUN,
+    request_delay_seconds=REQUEST_DELAY_SECONDS,
+    stop_on_rate_limit=STOP_ON_RATE_LIMIT,
+    auto_wait_on_rate_limit=AUTO_WAIT_ON_RATE_LIMIT,
+    max_rate_limit_retries=MAX_RATE_LIMIT_RETRIES,
+):
     success_count = 0
     failure_count = 0
     stopped_due_to_rate_limit = False
@@ -189,7 +205,7 @@ def process_deletes(access_token, candidates_to_process, log_file_path):
             tweet_id = candidate.get("id", "unknown_id")
             created_at = candidate.get("created_at", "")
 
-            if DRY_RUN:
+            if dry_run:
                 print(f"[DRY RUN] Would delete post {tweet_id}")
                 log_result(
                     csv_writer,
@@ -220,7 +236,7 @@ def process_deletes(access_token, candidates_to_process, log_file_path):
                     maybe_wait_from_success_response(
                         response,
                         action_label=f"bulk_delete_posts tweet {tweet_id}",
-                        auto_wait=AUTO_WAIT_ON_RATE_LIMIT,
+                        auto_wait=auto_wait_on_rate_limit,
                     )
                     break
 
@@ -230,10 +246,10 @@ def process_deletes(access_token, candidates_to_process, log_file_path):
                     waited = handle_rate_limit_http_error(
                         error,
                         action_label=f"bulk_delete_posts tweet {tweet_id}",
-                        auto_wait=AUTO_WAIT_ON_RATE_LIMIT,
+                        auto_wait=auto_wait_on_rate_limit,
                     )
 
-                    if waited and retry_count < MAX_RATE_LIMIT_RETRIES:
+                    if waited and retry_count < max_rate_limit_retries:
                         retry_count += 1
                         print(f"[RETRY] Retrying delete for post {tweet_id} after rate-limit wait...")
                         continue
@@ -249,17 +265,25 @@ def process_deletes(access_token, candidates_to_process, log_file_path):
 
                     if error.response is not None and error.response.status_code == 429:
                         stopped_due_to_rate_limit = True
-                        if STOP_ON_RATE_LIMIT:
+                        if stop_on_rate_limit:
                             print("\n[STOP] Rate limit persisted. Stopping run early.")
                             return success_count, failure_count, stopped_due_to_rate_limit
                     break
 
-            time.sleep(REQUEST_DELAY_SECONDS)
+            time.sleep(request_delay_seconds)
 
     return success_count, failure_count, stopped_due_to_rate_limit
 
 
-def main():
+def run_bulk_delete_posts_by_date(
+    dry_run=DRY_RUN,
+    limit=MAX_TWEETS_TO_PROCESS,
+    request_delay_seconds=REQUEST_DELAY_SECONDS,
+    stop_on_rate_limit=STOP_ON_RATE_LIMIT,
+    auto_wait_on_rate_limit=AUTO_WAIT_ON_RATE_LIMIT,
+    max_rate_limit_retries=MAX_RATE_LIMIT_RETRIES,
+):
+    """Preview or delete saved post-delete candidates with resume support."""
     print("Loading access token...")
     access_token = load_access_token()
 
@@ -297,6 +321,8 @@ def main():
         original_candidates,
         remaining_candidates,
         skipped_count,
+        limit=limit,
+        dry_run=dry_run,
     )
 
     ensure_logs_dir()
@@ -308,10 +334,15 @@ def main():
         access_token,
         candidates_to_process,
         log_file_path,
+        dry_run=dry_run,
+        request_delay_seconds=request_delay_seconds,
+        stop_on_rate_limit=stop_on_rate_limit,
+        auto_wait_on_rate_limit=auto_wait_on_rate_limit,
+        max_rate_limit_retries=max_rate_limit_retries,
     )
 
     print("\n--- BULK DELETE POSTS SUMMARY ---")
-    if DRY_RUN:
+    if dry_run:
         print("Mode: DRY RUN")
         print(f"Previewed {len(candidates_to_process)} post delete candidates.")
         print("No changes were made.")
@@ -325,6 +356,23 @@ def main():
             print("You can rerun later and resume from the remaining candidates.")
 
     print(f"Log saved to: {log_file_path}")
+
+    return {
+        "profile": live_profile,
+        "original_candidates_count": len(original_candidates),
+        "remaining_candidates_count": len(remaining_candidates),
+        "candidates_selected_count": len(candidates_to_process),
+        "skipped_count": skipped_count,
+        "dry_run": dry_run,
+        "success_count": success_count,
+        "failure_count": failure_count,
+        "stopped_due_to_rate_limit": stopped_due_to_rate_limit,
+        "log_file_path": log_file_path,
+    }
+
+
+def main():
+    run_bulk_delete_posts_by_date()
 
 
 if __name__ == "__main__":

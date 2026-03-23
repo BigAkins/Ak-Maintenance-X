@@ -97,7 +97,8 @@ def save_post_candidates(profile, posts, candidates, start_time, end_time):
     print(f"\nSaved post-delete candidate file to: {POST_DELETE_CANDIDATES_FILE}")
 
 
-def main():
+def run_find_posts_by_date(start_time=START_TIME, end_time=END_TIME):
+    """Find post-delete candidates in a date window and save them for review."""
     print("Loading access token...")
     access_token = load_access_token()
 
@@ -111,16 +112,16 @@ def main():
     print(f"User ID: {user_id}")
 
     print("\nUsing date range:")
-    print(f"START_TIME: {START_TIME}")
-    print(f"END_TIME:   {END_TIME}")
+    print(f"START_TIME: {start_time}")
+    print(f"END_TIME:   {end_time}")
     print("\nNote: retweets are excluded from this post-delete analysis.")
 
     print("\nFetching timeline posts in date range...")
     posts, _includes = get_posts_in_date_range(
         access_token,
         user_id,
-        start_time=START_TIME,
-        end_time=END_TIME,
+        start_time=start_time,
+        end_time=end_time,
     )
 
     print("\nBuilding post-delete candidates...")
@@ -132,12 +133,24 @@ def main():
         profile,
         posts,
         candidates,
-        START_TIME,
-        END_TIME,
+        start_time,
+        end_time,
     )
 
     print("\nAnalysis complete.")
     print("No account changes were made.")
+
+    return {
+        "profile": profile,
+        "posts_count": len(posts),
+        "post_delete_candidates_count": len(candidates),
+        "start_time": start_time,
+        "end_time": end_time,
+    }
+
+
+def main():
+    run_find_posts_by_date()
 
 
 if __name__ == "__main__":

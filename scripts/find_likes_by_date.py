@@ -146,7 +146,8 @@ def save_like_candidates(profile, liked_tweets, candidates, start_time, end_time
     print(f"\nSaved like candidate file to: {LIKE_CANDIDATES_FILE}")
 
 
-def main():
+def run_find_likes_by_date(start_time=START_TIME, end_time=END_TIME):
+    """Find liked posts within a date window and save them as candidates."""
     print("Loading access token...")
     access_token = load_access_token()
 
@@ -160,8 +161,8 @@ def main():
     print(f"User ID: {user_id}")
 
     print("\nUsing date range:")
-    print(f"START_TIME: {START_TIME}")
-    print(f"END_TIME:   {END_TIME}")
+    print(f"START_TIME: {start_time}")
+    print(f"END_TIME:   {end_time}")
     print("\nNote: filtering is based on the liked post's created_at date.")
 
     print("\nFetching all liked tweets...")
@@ -170,8 +171,8 @@ def main():
     print("\nFiltering liked tweets by created_at date range...")
     candidates = get_like_candidates_by_post_date(
         liked_tweets,
-        START_TIME,
-        END_TIME,
+        start_time,
+        end_time,
     )
 
     preview_like_candidates(candidates)
@@ -180,12 +181,24 @@ def main():
         profile,
         liked_tweets,
         candidates,
-        START_TIME,
-        END_TIME,
+        start_time,
+        end_time,
     )
 
     print("\nAnalysis complete.")
     print("No account changes were made.")
+
+    return {
+        "profile": profile,
+        "liked_tweets_count": len(liked_tweets),
+        "like_candidates_count": len(candidates),
+        "start_time": start_time,
+        "end_time": end_time,
+    }
+
+
+def main():
+    run_find_likes_by_date()
 
 
 if __name__ == "__main__":

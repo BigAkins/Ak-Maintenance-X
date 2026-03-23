@@ -102,7 +102,8 @@ def save_repost_candidates(profile, posts, repost_candidates, start_time, end_ti
     print(f"\nSaved repost candidate file to: {REPOST_CANDIDATES_FILE}")
 
 
-def main():
+def run_find_reposts(start_time=START_TIME, end_time=END_TIME):
+    """Find repost candidates in a date window and save them for later review."""
     print("Loading access token...")
     access_token = load_access_token()
 
@@ -116,15 +117,15 @@ def main():
     print(f"User ID: {user_id}")
 
     print("\nUsing date range:")
-    print(f"START_TIME: {START_TIME}")
-    print(f"END_TIME:   {END_TIME}")
+    print(f"START_TIME: {start_time}")
+    print(f"END_TIME:   {end_time}")
 
     print("\nFetching timeline posts in date range...")
     posts, _includes = get_timeline_posts(
         access_token,
         user_id,
-        start_time=START_TIME,
-        end_time=END_TIME,
+        start_time=start_time,
+        end_time=end_time,
     )
 
     print("\nFinding repost candidates...")
@@ -136,12 +137,24 @@ def main():
         profile,
         posts,
         repost_candidates,
-        START_TIME,
-        END_TIME,
+        start_time,
+        end_time,
     )
 
     print("\nAnalysis complete.")
     print("No account changes were made.")
+
+    return {
+        "profile": profile,
+        "posts_count": len(posts),
+        "repost_candidates_count": len(repost_candidates),
+        "start_time": start_time,
+        "end_time": end_time,
+    }
+
+
+def main():
+    run_find_reposts()
 
 
 if __name__ == "__main__":

@@ -102,12 +102,16 @@ def log_result(csv_writer, tweet_id, tweet_text, status, details):
     )
 
 
-def preview_tweets(tweets):
+def preview_tweets(
+    tweets,
+    limit=MAX_TWEETS_TO_PROCESS,
+    dry_run=DRY_RUN,
+):
     print("\n--- BULK UNLIKE PREVIEW ---")
     print(f"Found {len(tweets)} liked tweets on this page.")
-    print(f"Configured to process up to {MAX_TWEETS_TO_PROCESS} tweets.")
+    print(f"Configured to process up to {limit} tweets.")
 
-    tweets_to_process = tweets[:MAX_TWEETS_TO_PROCESS]
+    tweets_to_process = tweets[:limit]
 
     if not tweets_to_process:
         print("No liked tweets found to process.")
@@ -117,13 +121,23 @@ def preview_tweets(tweets):
     for tweet in tweets_to_process[:10]:
         print(f"- [{tweet['id']}] {tweet.get('text', '')[:100]}")
 
-    if DRY_RUN:
+    if dry_run:
         print("\nDRY_RUN is ON. No tweets will actually be unliked.")
 
     return tweets_to_process
 
 
-def process_unlikes(access_token, user_id, tweets_to_process, log_file_path):
+def process_unlikes(
+    access_token,
+    user_id,
+    tweets_to_process,
+    log_file_path,
+    dry_run=DRY_RUN,
+    request_delay_seconds=REQUEST_DELAY_SECONDS,
+    stop_on_rate_limit=STOP_ON_RATE_LIMIT,
+    auto_wait_on_rate_limit=AUTO_WAIT_ON_RATE_LIMIT,
+    max_rate_limit_retries=MAX_RATE_LIMIT_RETRIES,
+):
     success_count = 0
     failure_count = 0
     stopped_due_to_rate_limit = False
@@ -136,7 +150,7 @@ def process_unlikes(access_token, user_id, tweets_to_process, log_file_path):
             tweet_id = tweet.get("id", "unknown_id")
             tweet_text = tweet.get("text", "")
 
-            if DRY_RUN:
+            if dry_run:
                 print(f"[DRY RUN] Would unlike tweet {tweet_id}")
                 log_result(
                     csv_writer,
@@ -167,7 +181,7 @@ def process_unlikes(access_token, user_id, tweets_to_process, log_file_path):
                     maybe_wait_from_success_response(
                         response,
                         action_label=f"bulk_unlike tweet {tweet_id}",
-                        auto_wait=AUTO_WAIT_ON_RATE_LIMIT,
+                        auto_wait=auto_wait_on_rate_limit,
                     )
                     break
 
@@ -177,10 +191,10 @@ def process_unlikes(access_token, user_id, tweets_to_process, log_file_path):
                     waited = handle_rate_limit_http_error(
                         error,
                         action_label=f"bulk_unlike tweet {tweet_id}",
-                        auto_wait=AUTO_WAIT_ON_RATE_LIMIT,
+                        auto_wait=auto_wait_on_rate_limit,
                     )
 
-                    if waited and retry_count < MAX_RATE_LIMIT_RETRIES:
+                    if waited and retry_count < max_rate_limit_retries:
                         retry_count += 1
                         print(f"[RETRY] Retrying tweet {tweet_id} after rate-limit wait...")
                         continue
@@ -196,17 +210,25 @@ def process_unlikes(access_token, user_id, tweets_to_process, log_file_path):
 
                     if error.response is not None and error.response.status_code == 429:
                         stopped_due_to_rate_limit = True
-                        if STOP_ON_RATE_LIMIT:
+                        if stop_on_rate_limit:
                             print("\n[STOP] Rate limit persisted. Stopping run early.")
                             return success_count, failure_count, stopped_due_to_rate_limit
                     break
 
-            time.sleep(REQUEST_DELAY_SECONDS)
+            time.sleep(request_delay_seconds)
 
     return success_count, failure_count, stopped_due_to_rate_limit
 
 
-def main():
+def run_bulk_unlike(
+    dry_run=DRY_RUN,
+    limit=MAX_TWEETS_TO_PROCESS,
+    request_delay_seconds=REQUEST_DELAY_SECONDS,
+    stop_on_rate_limit=STOP_ON_RATE_LIMIT,
+    auto_wait_on_rate_limit=AUTO_WAIT_ON_RATE_LIMIT,
+    max_rate_limit_retries=MAX_RATE_LIMIT_RETRIES,
+):
+    """Preview or unlike the current page of liked tweets for the authenticated user."""
     print("Loading access token...")
     access_token = load_access_token()
 
@@ -222,7 +244,11 @@ def main():
     print("\nFetching liked tweets...")
     liked_tweets = get_liked_tweets(access_token, user_id)
 
-    tweets_to_process = preview_tweets(liked_tweets)
+    tweets_to_process = preview_tweets(
+        liked_tweets,
+        limit=limit,
+        dry_run=dry_run,
+    )
 
     ensure_logs_dir()
     log_file_path = build_log_file_path()
@@ -234,10 +260,15 @@ def main():
         user_id,
         tweets_to_process,
         log_file_path,
+        dry_run=dry_run,
+        request_delay_seconds=request_delay_seconds,
+        stop_on_rate_limit=stop_on_rate_limit,
+        auto_wait_on_rate_limit=auto_wait_on_rate_limit,
+        max_rate_limit_retries=max_rate_limit_retries,
     )
 
     print("\n--- BULK UNLIKE SUMMARY ---")
-    if DRY_RUN:
+    if dry_run:
         print("Mode: DRY RUN")
         print(f"Previewed {len(tweets_to_process)} tweets.")
         print("No changes were made.")
@@ -249,6 +280,21 @@ def main():
             print("Run stopped early because of rate limiting.")
 
     print(f"Log saved to: {log_file_path}")
+
+    return {
+        "profile": profile,
+        "liked_tweets_count": len(liked_tweets),
+        "tweets_selected_count": len(tweets_to_process),
+        "dry_run": dry_run,
+        "success_count": success_count,
+        "failure_count": failure_count,
+        "stopped_due_to_rate_limit": stopped_due_to_rate_limit,
+        "log_file_path": log_file_path,
+    }
+
+
+def main():
+    run_bulk_unlike()
 
 
 if __name__ == "__main__":

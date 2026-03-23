@@ -47,7 +47,8 @@ def get_following(access_token, user_id):
     return data.get("data", [])
 
 
-def main():
+def run_account_inspector(likes_preview_limit=5, following_preview_limit=5):
+    """Fetch the authenticated profile plus a preview of likes and following."""
     print("Loading access token...")
     access_token = load_access_token()
 
@@ -64,17 +65,27 @@ def main():
     likes = get_likes(access_token, user_id)
     print(f"Found {len(likes)} liked tweets")
 
-    for tweet in likes[:5]:
+    for tweet in likes[:likes_preview_limit]:
         print(f"- {tweet.get('text', '')[:80]}")
 
     print("\nFetching following list...")
     following = get_following(access_token, user_id)
     print(f"Following {len(following)} accounts")
 
-    for user in following[:5]:
+    for user in following[:following_preview_limit]:
         print(f"- @{user.get('username', 'unknown')}")
 
     print("\nInspection complete.")
+
+    return {
+        "profile": profile,
+        "likes": likes,
+        "following": following,
+    }
+
+
+def main():
+    run_account_inspector()
 
 
 if __name__ == "__main__":

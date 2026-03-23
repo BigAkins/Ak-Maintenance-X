@@ -149,19 +149,26 @@ def filter_out_already_processed_candidates(candidates, processed_ids):
     return remaining_candidates, skipped_count
 
 
-def preview_candidates(summary, original_candidates, remaining_candidates, skipped_count):
+def preview_candidates(
+    summary,
+    original_candidates,
+    remaining_candidates,
+    skipped_count,
+    limit=MAX_USERS_TO_PROCESS,
+    dry_run=DRY_RUN,
+):
     print("\n--- NON-FOLLOWER UNFOLLOW PREVIEW ---")
     print(f"Eligible candidates in file: {len(original_candidates)}")
     print(f"Already successfully processed from logs: {skipped_count}")
     print(f"Remaining candidates after resume filter: {len(remaining_candidates)}")
-    print(f"Configured to process up to {MAX_USERS_TO_PROCESS} accounts.")
+    print(f"Configured to process up to {limit} accounts.")
 
     if summary:
         print("\nCandidate file summary:")
         for key, value in summary.items():
             print(f"- {key}: {value}")
 
-    users_to_process = remaining_candidates[:MAX_USERS_TO_PROCESS]
+    users_to_process = remaining_candidates[:limit]
 
     if not users_to_process:
         print("\nNo remaining eligible candidates found to process.")
@@ -174,13 +181,23 @@ def preview_candidates(summary, original_candidates, remaining_candidates, skipp
         name = user.get("name", "unknown_name")
         print(f"- [{user_id}] @{username} ({name})")
 
-    if DRY_RUN:
+    if dry_run:
         print("\nDRY_RUN is ON. No accounts will actually be unfollowed.")
 
     return users_to_process
 
 
-def process_unfollows(access_token, source_user_id, users_to_process, log_file_path):
+def process_unfollows(
+    access_token,
+    source_user_id,
+    users_to_process,
+    log_file_path,
+    dry_run=DRY_RUN,
+    request_delay_seconds=REQUEST_DELAY_SECONDS,
+    stop_on_rate_limit=STOP_ON_RATE_LIMIT,
+    auto_wait_on_rate_limit=AUTO_WAIT_ON_RATE_LIMIT,
+    max_rate_limit_retries=MAX_RATE_LIMIT_RETRIES,
+):
     success_count = 0
     failure_count = 0
     stopped_due_to_rate_limit = False
@@ -194,7 +211,7 @@ def process_unfollows(access_token, source_user_id, users_to_process, log_file_p
             username = user.get("username", "unknown_username")
             name = user.get("name", "unknown_name")
 
-            if DRY_RUN:
+            if dry_run:
                 print(f"[DRY RUN] Would unfollow non-follower @{username} ({target_user_id})")
                 log_result(
                     csv_writer,
@@ -227,7 +244,7 @@ def process_unfollows(access_token, source_user_id, users_to_process, log_file_p
                     maybe_wait_from_success_response(
                         response,
                         action_label=f"bulk_unfollow_non_followers user {target_user_id}",
-                        auto_wait=AUTO_WAIT_ON_RATE_LIMIT,
+                        auto_wait=auto_wait_on_rate_limit,
                     )
                     break
 
@@ -237,10 +254,10 @@ def process_unfollows(access_token, source_user_id, users_to_process, log_file_p
                     waited = handle_rate_limit_http_error(
                         error,
                         action_label=f"bulk_unfollow_non_followers user {target_user_id}",
-                        auto_wait=AUTO_WAIT_ON_RATE_LIMIT,
+                        auto_wait=auto_wait_on_rate_limit,
                     )
 
-                    if waited and retry_count < MAX_RATE_LIMIT_RETRIES:
+                    if waited and retry_count < max_rate_limit_retries:
                         retry_count += 1
                         print(f"[RETRY] Retrying non-follower @{username} after rate-limit wait...")
                         continue
@@ -257,17 +274,25 @@ def process_unfollows(access_token, source_user_id, users_to_process, log_file_p
 
                     if error.response is not None and error.response.status_code == 429:
                         stopped_due_to_rate_limit = True
-                        if STOP_ON_RATE_LIMIT:
+                        if stop_on_rate_limit:
                             print("\n[STOP] Rate limit persisted. Stopping run early.")
                             return success_count, failure_count, stopped_due_to_rate_limit
                     break
 
-            time.sleep(REQUEST_DELAY_SECONDS)
+            time.sleep(request_delay_seconds)
 
     return success_count, failure_count, stopped_due_to_rate_limit
 
 
-def main():
+def run_bulk_unfollow_non_followers(
+    dry_run=DRY_RUN,
+    limit=MAX_USERS_TO_PROCESS,
+    request_delay_seconds=REQUEST_DELAY_SECONDS,
+    stop_on_rate_limit=STOP_ON_RATE_LIMIT,
+    auto_wait_on_rate_limit=AUTO_WAIT_ON_RATE_LIMIT,
+    max_rate_limit_retries=MAX_RATE_LIMIT_RETRIES,
+):
+    """Preview or unfollow saved non-follower candidates with resume support."""
     print("Loading access token...")
     access_token = load_access_token()
 
@@ -305,6 +330,8 @@ def main():
         original_candidates,
         remaining_candidates,
         skipped_count,
+        limit=limit,
+        dry_run=dry_run,
     )
 
     ensure_logs_dir()
@@ -317,10 +344,15 @@ def main():
         source_user_id,
         users_to_process,
         log_file_path,
+        dry_run=dry_run,
+        request_delay_seconds=request_delay_seconds,
+        stop_on_rate_limit=stop_on_rate_limit,
+        auto_wait_on_rate_limit=auto_wait_on_rate_limit,
+        max_rate_limit_retries=max_rate_limit_retries,
     )
 
     print("\n--- NON-FOLLOWER UNFOLLOW SUMMARY ---")
-    if DRY_RUN:
+    if dry_run:
         print("Mode: DRY RUN")
         print(f"Previewed {len(users_to_process)} non-follower candidates.")
         print("No changes were made.")
@@ -334,6 +366,23 @@ def main():
             print("You can rerun later and resume from the remaining candidates.")
 
     print(f"Log saved to: {log_file_path}")
+
+    return {
+        "profile": live_profile,
+        "original_candidates_count": len(original_candidates),
+        "remaining_candidates_count": len(remaining_candidates),
+        "users_selected_count": len(users_to_process),
+        "skipped_count": skipped_count,
+        "dry_run": dry_run,
+        "success_count": success_count,
+        "failure_count": failure_count,
+        "stopped_due_to_rate_limit": stopped_due_to_rate_limit,
+        "log_file_path": log_file_path,
+    }
+
+
+def main():
+    run_bulk_unfollow_non_followers()
 
 
 if __name__ == "__main__":

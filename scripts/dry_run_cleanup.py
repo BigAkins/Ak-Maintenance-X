@@ -50,7 +50,7 @@ def get_following(access_token, user_id):
     return data.get("data", [])
 
 
-def preview_likes_to_unlike(likes):
+def preview_likes_to_unlike(likes, max_likes_preview=MAX_LIKES_PREVIEW):
     print("\n--- DRY RUN: Likes Preview ---")
     print(f"Would unlike {len(likes)} liked tweets from this page.")
 
@@ -59,13 +59,16 @@ def preview_likes_to_unlike(likes):
         return
 
     print("\nSample liked tweets that would be unliked:")
-    for tweet in likes[:MAX_LIKES_PREVIEW]:
+    for tweet in likes[:max_likes_preview]:
         tweet_id = tweet.get("id", "unknown_id")
         tweet_text = tweet.get("text", "").replace("\n", " ").strip()
         print(f"- [{tweet_id}] {tweet_text[:100]}")
 
 
-def preview_following_to_unfollow(following):
+def preview_following_to_unfollow(
+    following,
+    max_following_preview=MAX_FOLLOWING_PREVIEW,
+):
     print("\n--- DRY RUN: Following Preview ---")
     print(f"Would unfollow {len(following)} accounts from this page.")
 
@@ -74,14 +77,18 @@ def preview_following_to_unfollow(following):
         return
 
     print("\nSample accounts that would be unfollowed:")
-    for user in following[:MAX_FOLLOWING_PREVIEW]:
+    for user in following[:max_following_preview]:
         user_id = user.get("id", "unknown_id")
         username = user.get("username", "unknown_username")
         name = user.get("name", "unknown_name")
         print(f"- [{user_id}] @{username} ({name})")
 
 
-def main():
+def run_dry_run_cleanup(
+    max_likes_preview=MAX_LIKES_PREVIEW,
+    max_following_preview=MAX_FOLLOWING_PREVIEW,
+):
+    """Preview the current likes and following page without making changes."""
     print("Loading access token...")
     access_token = load_access_token()
 
@@ -100,11 +107,26 @@ def main():
     print("Fetching following list for dry run...")
     following = get_following(access_token, user_id)
 
-    preview_likes_to_unlike(likes)
-    preview_following_to_unfollow(following)
+    preview_likes_to_unlike(likes, max_likes_preview=max_likes_preview)
+    preview_following_to_unfollow(
+        following,
+        max_following_preview=max_following_preview,
+    )
 
     print("\nDry run complete.")
     print("No changes were made to your account.")
+
+    return {
+        "profile": profile,
+        "likes": likes,
+        "following": following,
+        "likes_preview_count": min(len(likes), max_likes_preview),
+        "following_preview_count": min(len(following), max_following_preview),
+    }
+
+
+def main():
+    run_dry_run_cleanup()
 
 
 if __name__ == "__main__":

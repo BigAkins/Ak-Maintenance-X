@@ -130,7 +130,8 @@ def preview_results(protected_users, candidates):
         print("\nNo eligible non-follower candidates found.")
 
 
-def main():
+def run_find_non_followers():
+    """Analyze following vs followers and save eligible non-follower candidates."""
     print("Loading access token...")
     access_token = load_access_token()
 
@@ -175,6 +176,19 @@ def main():
 
     print("\nAnalysis complete.")
     print("No account changes were made.")
+
+    return {
+        "profile": profile,
+        "following_count": len(following),
+        "followers_count": len(followers),
+        "non_followers_count": len(non_followers),
+        "protected_users_count": len(protected_users),
+        "candidates_count": len(candidates),
+    }
+
+
+def main():
+    run_find_non_followers()
 
 
 if __name__ == "__main__":

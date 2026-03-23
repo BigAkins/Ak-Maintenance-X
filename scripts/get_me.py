@@ -8,7 +8,8 @@ bootstrap_project_root()
 from ak_maintenance_x.cleanup_helpers import load_access_token, get_profile
 
 
-def main():
+def run_get_me():
+    """Load the authenticated profile and print a quick identity check."""
     print("Loading access token...")
     access_token = load_access_token()
 
@@ -19,6 +20,12 @@ def main():
     print(f"Name: {profile['name']}")
     print(f"Username: @{profile['username']}")
     print(f"User ID: {profile['id']}")
+
+    return profile
+
+
+def main():
+    run_get_me()
 
 
 if __name__ == "__main__":
