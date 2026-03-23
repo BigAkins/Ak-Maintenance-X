@@ -6,6 +6,31 @@ from ak_maintenance_x.workflows import get_workflow, list_workflows
 
 WORKFLOW_NAMES = list_workflows()
 
+# Short aliases -> canonical workflow names
+WORKFLOW_ALIASES = {
+    "me": "get-me",
+    "non-followers": "find-non-followers",
+    "reposts": "find-reposts",
+    "likes-by-date": "find-likes-by-date",
+    "posts-by-date": "find-posts-by-date",
+    "unlike-candidates": "bulk-unlike-candidates",
+    "unfollow-non-followers": "bulk-unfollow-non-followers",
+    "unrepost": "bulk-unrepost",
+    "delete-posts": "bulk-delete-posts",
+}
+
+ALL_COMMAND_NAMES = WORKFLOW_NAMES + list(WORKFLOW_ALIASES.keys())
+
+
+def resolve_workflow_name(name):
+    if name in WORKFLOW_NAMES:
+        return name
+    if name in WORKFLOW_ALIASES:
+        return WORKFLOW_ALIASES[name]
+    raise ValueError(
+        f"Unknown workflow '{name}'. Available commands: {ALL_COMMAND_NAMES}"
+    )
+
 
 def add_common_arguments(parser):
     parser.add_argument(
@@ -96,24 +121,24 @@ def build_parser():
     # list command
     subparsers.add_parser(
         "list",
-        help="List available workflows",
-        description="List all available workflows registered in the system.",
+        help="List available workflows and aliases",
+        description="List all available workflows and aliases registered in the system.",
     )
 
     # legacy run command
     run_parser = subparsers.add_parser(
         "run",
         help="Run a workflow by name",
-        description="Run a workflow by explicit name.",
+        description="Run a workflow by explicit name or alias.",
     )
     run_parser.add_argument(
         "workflow",
-        choices=WORKFLOW_NAMES,
-        help="Workflow name to run",
+        choices=ALL_COMMAND_NAMES,
+        help="Workflow name or alias to run",
     )
     add_common_arguments(run_parser)
 
-    # direct workflow commands
+    # direct canonical workflow commands
     for workflow_name in WORKFLOW_NAMES:
         workflow_parser = subparsers.add_parser(
             workflow_name,
@@ -122,6 +147,16 @@ def build_parser():
         )
         add_common_arguments(workflow_parser)
         workflow_parser.set_defaults(workflow=workflow_name)
+
+    # alias commands
+    for alias_name, canonical_name in WORKFLOW_ALIASES.items():
+        alias_parser = subparsers.add_parser(
+            alias_name,
+            help=f"Alias for '{canonical_name}'",
+            description=f"Alias for '{canonical_name}'.",
+        )
+        add_common_arguments(alias_parser)
+        alias_parser.set_defaults(workflow=alias_name)
 
     return parser
 
@@ -191,12 +226,20 @@ def run_list_command():
     for name in WORKFLOW_NAMES:
         print(f"- {name}")
 
+    print("\nAliases:")
+    for alias, workflow in WORKFLOW_ALIASES.items():
+        print(f"- {alias} -> {workflow}")
+
 
 def run_workflow(workflow_name, args):
-    workflow_func = get_workflow(workflow_name)
+    canonical_name = resolve_workflow_name(workflow_name)
+    workflow_func = get_workflow(canonical_name)
     kwargs = build_workflow_kwargs(args, workflow_func)
 
-    print(f"Running workflow: {workflow_name}")
+    print(f"Running workflow: {canonical_name}")
+    if workflow_name != canonical_name:
+        print(f"Alias used: {workflow_name}")
+
     if kwargs:
         print("Overrides:")
         for key, value in kwargs.items():
@@ -221,7 +264,6 @@ def main():
         run_workflow(args.workflow, args)
         return
 
-    # direct workflow command
     run_workflow(args.workflow, args)
 
 
