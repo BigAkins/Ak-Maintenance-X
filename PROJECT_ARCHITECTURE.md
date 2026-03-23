@@ -2,9 +2,9 @@
 
 ## Overview
 
-Ak Maintenance X is a Python automation project for inspecting and managing account activity on X using the X API.
+Ak Maintenance X is a Python-based automation system for inspecting and managing account activity on X using the X API.
 
-The project is designed around a safety-first workflow:
+The project is designed around a **safety-first workflow pipeline**:
 
 1. authenticate
 2. inspect data
@@ -13,184 +13,272 @@ The project is designed around a safety-first workflow:
 5. execute actions in controlled batches
 6. log results for traceability and resume support
 
+This system is built to behave like a **production-grade tool**, where mistakes could impact real user data.
+
 ---
 
 ## Core Design Principles
 
 ### 1. Separation of concerns
-Each script has one main job.
+Each script and module has a single responsibility:
+- analysis scripts (read-only)
+- action scripts (mutating operations)
+- shared helpers (reusable logic)
+- configuration (centralized settings)
 
-### 2. Safe defaults
-Scripts default to dry-run mode and small batch sizes.
+---
+
+### 2. Safety-first defaults
+All workflows are designed to prevent accidental data loss:
+- dry-run mode enabled by default
+- small batch sizes
+- explicit `--live` flag required for execution
+
+---
 
 ### 3. Shared configuration
-Common settings live in `cleanup_config.py`.
+Common settings are centralized in:
 
-### 4. Shared helpers
-Reusable utility functions live in `cleanup_helpers.py`.
-
-### 5. Logging and resume support
-Action scripts write CSV logs and can use prior results to avoid repeating successful work.
-
----
-
-## File Responsibilities
-
-### `cleanup_config.py`
-Shared configuration values for the project.
+```
+ak_maintenance_x/cleanup_config.py
+```
 
 Examples:
-- token file name
-- logs directory
-- dry-run defaults
-- request delay defaults
-- batch size defaults
-- protected accounts file name
+- default batch sizes
+- request delays
+- rate-limit retry behavior
+- protected accounts file
+- log directory paths
 
 ---
 
-### `cleanup_helpers.py`
-Shared helper functions used by multiple scripts.
+### 4. Shared helpers
+Reusable logic lives in:
+
+```
+ak_maintenance_x/cleanup_helpers.py
+```
 
 Examples:
 - loading access tokens
-- building authorization headers
-- fetching the authenticated user profile
-- normalizing usernames
-- loading protected account rules
+- building request headers
+- fetching authenticated user info
+- pagination helpers
+- candidate file validation
+- username normalization
 
 ---
 
-### `auth_test.py`
-Handles OAuth authentication with X and saves a token locally.
+### 5. Rate-limit awareness
+The system is designed to handle real-world API constraints:
+- request delays between calls
+- automatic retry handling
+- optional auto-wait behavior
+- stop-on-429 protection
 
-Purpose:
-- verify authentication works
-- save token data for later scripts
+Core logic lives in:
+
+```
+ak_maintenance_x/cleanup_rate_limits.py
+```
+
+---
+
+### 6. Logging and resume support
+All action workflows:
+- write structured CSV logs
+- track success vs failure
+- support resuming from previous runs
+
+This prevents:
+- duplicate actions
+- wasted API calls
+- inconsistent state
+
+---
+
+### 7. CLI-driven architecture
+All workflows are exposed through a centralized CLI:
+
+```
+main.py
+```
+
+Features:
+- workflow registry
+- direct commands + aliases
+- argument validation
+- JSON output mode
+- shell autocomplete support
+
+---
+
+## Project Structure
+
+```
+Ak-Maintenance-X/
+│
+├── ak_maintenance_x/
+│   ├── cleanup_config.py
+│   ├── cleanup_helpers.py
+│   ├── cleanup_rate_limits.py
+│   └── workflows.py
+│
+├── scripts/
+│   ├── auth_test.py
+│   ├── get_me.py
+│   ├── account_inspector.py
+│   ├── dry_run_cleanup.py
+│   ├── find_non_followers.py
+│   ├── find_reposts.py
+│   ├── find_likes_by_date.py
+│   ├── find_posts_by_date.py
+│   ├── bulk_unlike.py
+│   ├── bulk_unlike_candidates.py
+│   ├── bulk_unfollow.py
+│   ├── bulk_unfollow_non_followers.py
+│   ├── bulk_unrepost.py
+│   └── bulk_delete_posts_by_date.py
+│
+├── logs/
+├── main.py
+├── .env
+└── PROJECT_ARCHITECTURE.md
+```
+
+---
+
+## Workflow Types
+
+### 1. Authentication
+
+#### `auth_test.py`
+Handles OAuth 2.0 PKCE authentication.
 
 Output:
 - `token.json`
 
 ---
 
-### `get_me.py`
-Tests the authenticated session by calling the current-user endpoint.
+### 2. Utility / Inspection
 
-Purpose:
-- verify the saved token works
-- confirm the logged-in account
+#### `get_me.py`
+Verifies authentication and displays account identity.
 
----
+#### `account_inspector.py`
+Read-only inspection of:
+- profile info
+- likes
+- following
 
-### `account_inspector.py`
-Read-only inspection script.
-
-Purpose:
-- inspect profile info
-- inspect liked tweets
-- inspect followed accounts
-
-Safety:
-- makes no account changes
+#### `dry_run_cleanup.py`
+Preview-only cleanup simulation.
 
 ---
 
-### `dry_run_cleanup.py`
-Preview-only cleanup script.
+### 3. Analysis Workflows (Read-Only)
 
-Purpose:
-- show what would be unliked or unfollowed
-- validate cleanup logic before live actions
+These scripts generate candidate files for review.
 
-Safety:
-- makes no account changes
+#### `find_non_followers.py`
+- compares following vs followers
+- filters protected accounts
+- outputs:
+  - `non_follower_candidates.json`
 
----
+#### `find_reposts.py`
+- scans user timeline
+- filters reposts by date
+- outputs:
+  - `repost_candidates.json`
 
-### `bulk_unlike.py`
-Batch unlike workflow.
+#### `find_likes_by_date.py`
+- fetches liked tweets
+- filters by created_at date
+- outputs:
+  - `like_candidates.json`
 
-Purpose:
-- preview liked tweets
-- unlike tweets in small batches
-- log every result
-
-Safety features:
-- dry-run mode
-- batch cap
-- request delay
-- CSV logging
-
----
-
-### `bulk_unfollow.py`
-Generic batch unfollow workflow.
-
-Purpose:
-- unfollow selected followed accounts
-- apply protected account filtering
-- log every result
-
-Safety features:
-- protected accounts config
-- dry-run mode
-- batch cap
-- request delay
-- CSV logging
+#### `find_posts_by_date.py`
+- fetches user tweets
+- filters by date range
+- supports excluding:
+  - reposts
+  - replies
+- outputs:
+  - `post_delete_candidates.json`
 
 ---
 
-### `find_non_followers.py`
-Read-only non-follower analysis workflow.
+### 4. Action Workflows (Mutating)
 
-Purpose:
-- fetch all following pages
-- fetch all follower pages
-- compare user IDs
-- remove protected accounts
-- save a reviewed candidate list
+These scripts perform account changes.
 
-Output:
-- `non_follower_candidates.json`
+#### `bulk_unlike.py`
+- directly unlikes tweets
 
-Safety:
-- makes no account changes
+#### `bulk_unlike_candidates.py`
+- unlikes from reviewed candidate file
 
----
+#### `bulk_unfollow.py`
+- unfollows selected accounts
 
-### `bulk_unfollow_non_followers.py`
-Specialized batch unfollow workflow for reviewed non-follower candidates.
+#### `bulk_unfollow_non_followers.py`
+- unfollows reviewed non-followers
+- verifies candidate file ownership
+- supports resume via logs
 
-Purpose:
-- load the saved candidate list
-- verify the file matches the authenticated user
-- preview or unfollow candidates
-- stop on rate limit
-- resume using previous success logs
+#### `bulk_unrepost.py`
+- removes reposts from candidate file
+- rate-limit aware
+- resumable
 
-Safety features:
-- dry-run mode
-- batch cap
-- request delay
-- stop on 429
-- resume support from logs
-- candidate file user-ID verification
+#### `bulk_delete_posts_by_date.py`
+- deletes posts from candidate file
+- supports filtering logic from analysis step
 
 ---
 
 ## Data Flow
 
-```text
+```
 auth_test.py
     ↓
 token.json
     ↓
-get_me.py / account_inspector.py / dry_run_cleanup.py
+inspection / analysis scripts
     ↓
-find_non_followers.py
+candidate files (.json)
     ↓
-non_follower_candidates.json
-    ↓
-bulk_unfollow_non_followers.py
+action workflows
     ↓
 logs/*.csv
+```
+
+---
+
+## Safety Pipeline
+
+Every action follows:
+
+```
+analyze → generate candidates → review → dry-run → execute → log → resume
+```
+
+This ensures:
+- visibility before action
+- control during execution
+- recoverability after failure
+
+---
+
+## Why This Architecture Matters
+
+This project is designed to mirror real-world engineering systems:
+
+- handles external API constraints
+- protects against destructive actions
+- tracks state across runs
+- separates read vs write workflows
+- prioritizes user safety over speed
+
+It is not just a collection of scripts — it is a **controlled automation system**.

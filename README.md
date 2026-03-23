@@ -1,68 +1,73 @@
 # Ak Maintenance X
 
-A Python automation tool for securely inspecting and managing X (Twitter) account activity using the X API.
+A safety-first automation system for inspecting and managing X (Twitter) account activity using the X API.
 
-This project uses OAuth 2.0 Authorization Code Flow with PKCE and is designed as a **safety-first automation system** for managing account activity such as likes and follows.
+Built as part of my athlete-to-tech transition, this project focuses on **real-world automation, API design, and safe batch processing systems**.
 
 ---
 
-## Features
+## What This Project Does
+
+Ak Maintenance X helps you:
+
+- Analyze your account (likes, follows, reposts, posts)
+- Identify cleanup targets (non-followers, old likes, reposts)
+- Preview changes safely (dry-run mode)
+- Execute bulk actions (unlike, unfollow, unrepost, delete)
+- Handle rate limits, logging, and resume safely
+
+---
+
+## Key Features
 
 - OAuth 2.0 PKCE authentication
-- Secure token-based API access
-- Read-only account inspection
-- Dry-run cleanup previews (no changes made)
-- Bulk unlike tweets (with logging)
-- Bulk unfollow accounts (with protection rules)
-- Non-follower detection and targeted unfollowing
-- Protected account filtering (external config)
-- CSV logging for all actions
-- Resume support from previous logs
-- Rate-limit protection (stop on 429)
+- Modular Python architecture
+- CLI interface with aliases (like a real tool)
+- Dry-run mode by default (safety-first)
+- Batch processing with limits and delays
+- Resume support via logs
+- Rate-limit handling (429 protection + retry logic)
+- External protected account config
+- JSON + human-readable output modes
+- Shell autocomplete support (argcomplete)
+
+---
+
+## Architecture
+
+The system follows a **safe workflow pipeline**:
+
+```
+authenticate
+→ inspect data
+→ generate candidates
+→ preview (dry-run)
+→ execute (batched + safe)
+→ log results
+→ resume if needed
+```
+
+For a deeper breakdown, see `PROJECT_ARCHITECTURE.md`.
 
 ---
 
 ## Project Structure
 
 ```
-ak-maintenance-x/
-├── auth_test.py
-├── get_me.py
-├── account_inspector.py
-├── dry_run_cleanup.py
-├── bulk_unlike.py
-├── bulk_unfollow.py
-├── find_non_followers.py
-├── bulk_unfollow_non_followers.py
-├── cleanup_config.py
-├── cleanup_helpers.py
-├── protected_accounts.example.json
-├── PROJECT_ARCHITECTURE.md
-├── requirements.txt
-├── .env.example
-├── .gitignore
-└── README.md
+ak_maintenance_x/
+│
+├── ak_maintenance_x/      # Core package (helpers, config, rate limits, workflows)
+├── scripts/               # Individual workflow scripts
+├── logs/                  # CSV logs (generated)
+├── main.py                # CLI entrypoint
+├── .env                   # API credentials (local only)
+├── README.md
+└── PROJECT_ARCHITECTURE.md
 ```
 
 ---
 
-## How It Works
-
-This project follows a structured, safe workflow:
-
-```
-authenticate
-→ inspect account data
-→ generate candidate actions
-→ preview with dry-run
-→ execute in small batches
-→ log results
-→ resume if needed
-```
-
----
-
-## Quick Start
+## Setup
 
 ### 1. Install dependencies
 
@@ -81,103 +86,97 @@ Add your X API credentials.
 ### 3. Authenticate
 
 ```
-python auth_test.py
+python scripts/auth_test.py
 ```
 
-### 4. Verify authentication
+### 4. Verify
 
 ```
-python get_me.py
+python main.py whoami
 ```
 
 ---
 
-## Main Workflows
+## CLI Usage
 
-### Read-only inspection
-
-```
-python account_inspector.py
-python dry_run_cleanup.py
-```
-
-### Bulk unlike tweets
+### List workflows
 
 ```
-python bulk_unlike.py
+python main.py list
 ```
 
-### Bulk unfollow (general)
+### Example commands
 
 ```
-python bulk_unfollow.py
+python main.py whoami
+python main.py inspect-account
+python main.py non-followers
+python main.py reposts --start-time 2026-03-31T00:00:00Z --end-time 2026-04-03T00:00:00Z
+
+python main.py unrepost --dry-run --limit 5
+python main.py delete-posts --dry-run --limit 10
 ```
 
-### Find non-followers
+### JSON mode (for automation)
 
 ```
-python find_non_followers.py
-```
-
-### Unfollow non-followers (from reviewed file)
-
-```
-python bulk_unfollow_non_followers.py
+python main.py whoami --json
 ```
 
 ---
 
 ## Safety Features
 
-- Dry-run mode enabled by default
-- Small batch-size limits
-- Request delay between API calls
-- Protected account filtering via config file
-- Candidate file verification before actions
-- CSV logging of all actions
-- Resume support using previous logs
-- Automatic stop on rate limit (429)
+This project is built **not to mess up your account**:
+
+- Dry-run mode ON by default
+- Batch limits enforced
+- Request delays between API calls
+- Protected accounts filtering
+- Candidate file verification
+- CSV logs for every action
+- Resume support from logs
+- Rate-limit detection + retry handling
 
 ---
 
-## Configuration Files
-
-### `.env`
-Stores your API credentials (never commit this file).
-
-### `protected_accounts.example.json`
-Public-safe example file.
-
-### `protected_accounts.json`
-Local private file for protected usernames and IDs.
-
-Example:
+## Example Workflow
 
 ```
-{
-  "keep_usernames": [
-    "akinooola"
-  ],
-  "keep_user_ids": []
-}
-```
+python main.py non-followers
+→ generates candidate file
 
-### `non_follower_candidates.json`
-Generated file containing reviewed non-follower accounts.
+review file
+
+python main.py unfollow-non-followers --dry-run
+→ preview
+
+python main.py unfollow-non-followers --live
+→ execute safely
+```
 
 ---
 
-## Documentation
+## What I Learned
 
-See `PROJECT_ARCHITECTURE.md` for a deeper breakdown of:
-- system design
-- script responsibilities
-- data flow
-- safety mechanisms
+- How to design safe automation systems
+- How to work with real-world APIs (OAuth, pagination, rate limits)
+- CLI design and developer experience
+- Structuring scalable Python projects
+- Building tools with real-world consequences
 
 ---
 
 ## Author
 
 Akinola Ogunbiyi  
-Former Division-I athlete transitioning into software engineering, DevOps, and automation tooling.
+Former Division I athlete → Software Engineer
+
+Building tools, systems, and automation while documenting the journey.
+
+---
+
+## ⚠️ Disclaimer
+
+This project is for educational and personal use.  
+Use responsibly and respect platform policies.
