@@ -19,7 +19,43 @@ WORKFLOW_ALIASES = {
     "delete-posts": "bulk-delete-posts",
 }
 
-ALL_COMMAND_NAMES = WORKFLOW_NAMES + list(WORKFLOW_ALIASES.keys())
+WORKFLOW_GROUPS = {
+    "Utility": [
+        "get-me",
+        "inspect",
+        "dry-run",
+    ],
+    "Analysis": [
+        "find-non-followers",
+        "find-reposts",
+        "find-likes-by-date",
+        "find-posts-by-date",
+    ],
+    "Actions": [
+        "bulk-unlike",
+        "bulk-unlike-candidates",
+        "bulk-unfollow",
+        "bulk-unfollow-non-followers",
+        "bulk-unrepost",
+        "bulk-delete-posts",
+    ],
+}
+
+WORKFLOW_DESCRIPTIONS = {
+    "get-me": "Show the authenticated X account profile.",
+    "inspect": "Inspect account activity like likes and following.",
+    "dry-run": "Preview cleanup targets without making changes.",
+    "find-non-followers": "Analyze non-followers and save candidate file.",
+    "find-reposts": "Find repost candidates in a date range.",
+    "find-likes-by-date": "Find liked posts by the liked post's created_at date.",
+    "find-posts-by-date": "Find your own posts in a date range for deletion review.",
+    "bulk-unlike": "Bulk unlike directly from liked posts.",
+    "bulk-unlike-candidates": "Bulk unlike from reviewed like candidate file.",
+    "bulk-unfollow": "Bulk unfollow from following list.",
+    "bulk-unfollow-non-followers": "Bulk unfollow from reviewed non-follower candidates.",
+    "bulk-unrepost": "Bulk unrepost from reviewed repost candidates.",
+    "bulk-delete-posts": "Bulk delete from reviewed post-delete candidates.",
+}
 
 
 def resolve_workflow_name(name):
@@ -27,9 +63,7 @@ def resolve_workflow_name(name):
         return name
     if name in WORKFLOW_ALIASES:
         return WORKFLOW_ALIASES[name]
-    raise ValueError(
-        f"Unknown workflow '{name}'. Available commands: {ALL_COMMAND_NAMES}"
-    )
+    raise ValueError(f"Unknown workflow '{name}'.")
 
 
 def add_common_arguments(parser):
@@ -114,6 +148,7 @@ def build_parser():
     parser = argparse.ArgumentParser(
         prog="main.py",
         description="Ak Maintenance X command-line interface",
+        epilog="Use 'python main.py list' to view workflows and aliases.",
     )
 
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -121,19 +156,19 @@ def build_parser():
     # list command
     subparsers.add_parser(
         "list",
-        help="List available workflows and aliases",
-        description="List all available workflows and aliases registered in the system.",
+        help="List workflows and aliases",
+        description="List all available workflows and aliases grouped by purpose.",
     )
 
     # legacy run command
     run_parser = subparsers.add_parser(
         "run",
-        help="Run a workflow by name",
-        description="Run a workflow by explicit name or alias.",
+        help="Run a workflow by canonical name or alias",
+        description="Run a workflow by explicit canonical name or alias.",
     )
     run_parser.add_argument(
         "workflow",
-        choices=ALL_COMMAND_NAMES,
+        choices=WORKFLOW_NAMES + list(WORKFLOW_ALIASES.keys()),
         help="Workflow name or alias to run",
     )
     add_common_arguments(run_parser)
@@ -142,8 +177,8 @@ def build_parser():
     for workflow_name in WORKFLOW_NAMES:
         workflow_parser = subparsers.add_parser(
             workflow_name,
-            help=f"Run the '{workflow_name}' workflow",
-            description=f"Run the '{workflow_name}' workflow.",
+            help=WORKFLOW_DESCRIPTIONS.get(workflow_name, f"Run '{workflow_name}'"),
+            description=WORKFLOW_DESCRIPTIONS.get(workflow_name, f"Run '{workflow_name}'"),
         )
         add_common_arguments(workflow_parser)
         workflow_parser.set_defaults(workflow=workflow_name)
@@ -153,7 +188,7 @@ def build_parser():
         alias_parser = subparsers.add_parser(
             alias_name,
             help=f"Alias for '{canonical_name}'",
-            description=f"Alias for '{canonical_name}'.",
+            description=f"Alias for '{canonical_name}': {WORKFLOW_DESCRIPTIONS.get(canonical_name, '')}",
         )
         add_common_arguments(alias_parser)
         alias_parser.set_defaults(workflow=alias_name)
@@ -222,13 +257,18 @@ def build_workflow_kwargs(args, workflow_func):
 
 
 def run_list_command():
-    print("Available workflows:")
-    for name in WORKFLOW_NAMES:
-        print(f"- {name}")
+    print("Available workflows by group:\n")
 
-    print("\nAliases:")
+    for group_name, workflows in WORKFLOW_GROUPS.items():
+        print(f"{group_name}:")
+        for workflow in workflows:
+            description = WORKFLOW_DESCRIPTIONS.get(workflow, "")
+            print(f"  - {workflow}: {description}")
+        print()
+
+    print("Aliases:")
     for alias, workflow in WORKFLOW_ALIASES.items():
-        print(f"- {alias} -> {workflow}")
+        print(f"  - {alias} -> {workflow}")
 
 
 def run_workflow(workflow_name, args):
