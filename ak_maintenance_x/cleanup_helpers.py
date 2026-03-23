@@ -1,26 +1,104 @@
 import json
 import os
+import time
 
 import requests
+from dotenv import load_dotenv
 
 from ak_maintenance_x.cleanup_config import (
     TOKEN_FILE,
     PROTECTED_ACCOUNTS_FILE,
     DEFAULT_KEEP_USERNAMES,
     DEFAULT_KEEP_USER_IDS,
+    TOKEN_REFRESH_BUFFER_SECONDS,
+    TOKEN_URL,
 )
 
+load_dotenv()
+
 ME_URL = "https://api.x.com/2/users/me"
+CLIENT_ID = os.getenv("X_CLIENT_ID")
 
 
-def load_access_token():
+def load_token_data():
     try:
         with open(TOKEN_FILE, "r", encoding="utf-8") as file:
-            token_data = json.load(file)
+            return json.load(file)
     except FileNotFoundError as exc:
         raise FileNotFoundError(
             "token.json not found. Run auth_test.py first to authenticate."
         ) from exc
+
+
+def save_token_data(token_data):
+    with open(TOKEN_FILE, "w", encoding="utf-8") as file:
+        json.dump(token_data, file, indent=2)
+
+
+def token_is_expired_or_near_expiry(token_data):
+    expires_at = token_data.get("expires_at")
+    expires_in = token_data.get("expires_in")
+    obtained_at = token_data.get("obtained_at")
+
+    if expires_at is None:
+        if expires_in is None or obtained_at is None:
+            return False
+        expires_at = obtained_at + expires_in
+        token_data["expires_at"] = expires_at
+        save_token_data(token_data)
+
+    now = int(time.time())
+    return now >= int(expires_at) - TOKEN_REFRESH_BUFFER_SECONDS
+
+
+def refresh_access_token(token_data):
+    refresh_token = token_data.get("refresh_token")
+    if not refresh_token:
+        raise ValueError(
+            "No refresh_token found in token.json. Re-run auth_test.py with offline.access."
+        )
+
+    if not CLIENT_ID:
+        raise ValueError("Missing X_CLIENT_ID in environment.")
+
+    data = {
+        "refresh_token": refresh_token,
+        "grant_type": "refresh_token",
+        "client_id": CLIENT_ID,
+    }
+
+    response = requests.post(
+        TOKEN_URL,
+        headers={"Content-Type": "application/x-www-form-urlencoded"},
+        data=data,
+        timeout=30,
+    )
+    response.raise_for_status()
+
+    refreshed = response.json()
+
+    now = int(time.time())
+    refreshed["obtained_at"] = now
+
+    if "expires_in" in refreshed:
+        refreshed["expires_at"] = now + int(refreshed["expires_in"])
+
+    # Preserve refresh token if X does not return a new one
+    if "refresh_token" not in refreshed:
+        refreshed["refresh_token"] = refresh_token
+
+    save_token_data(refreshed)
+    print("[INFO] Access token refreshed successfully.")
+
+    return refreshed
+
+
+def load_access_token():
+    token_data = load_token_data()
+
+    if token_is_expired_or_near_expiry(token_data):
+        print("[INFO] Access token expired or near expiry. Refreshing...")
+        token_data = refresh_access_token(token_data)
 
     access_token = token_data.get("access_token")
     if not access_token:

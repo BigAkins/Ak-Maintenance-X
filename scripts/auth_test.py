@@ -47,8 +47,17 @@ def generate_code_challenge(code_verifier):
 
 
 def save_token(token_data):
+    import time
+
+    now = int(time.time())
+    token_data["obtained_at"] = now
+
+    if "expires_in" in token_data:
+        token_data["expires_at"] = now + int(token_data["expires_in"])
+
     with open(TOKEN_FILE, "w", encoding="utf-8") as file:
         json.dump(token_data, file, indent=2)
+
     print(f"\nToken saved to {TOKEN_FILE}")
 
 

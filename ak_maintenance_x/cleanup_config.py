@@ -1,3 +1,8 @@
+# Token refresh settings
+
+TOKEN_REFRESH_BUFFER_SECONDS = 300
+TOKEN_URL = "https://api.x.com/2/oauth2/token"
+
 # Shared configuration for cleanup scripts
 
 TOKEN_FILE = "token.json"
