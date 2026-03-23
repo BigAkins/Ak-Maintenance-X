@@ -1,47 +1,16 @@
-import json
 import requests
 
-TOKEN_FILE = "token.json"
+from cleanup_helpers import (
+    load_access_token,
+    get_profile,
+    make_headers,
+)
 
-ME_URL = "https://api.x.com/2/users/me"
 LIKES_URL = "https://api.x.com/2/users/{user_id}/liked_tweets"
 FOLLOWING_URL = "https://api.x.com/2/users/{user_id}/following"
 
-# Change these later if you want different preview limits
 MAX_LIKES_PREVIEW = 10
 MAX_FOLLOWING_PREVIEW = 10
-
-
-def load_access_token():
-    try:
-        with open(TOKEN_FILE, "r", encoding="utf-8") as file:
-            token_data = json.load(file)
-    except FileNotFoundError:
-        raise FileNotFoundError(
-            "token.json not found. Run auth_test.py first to authenticate."
-        )
-
-    access_token = token_data.get("access_token")
-    if not access_token:
-        raise ValueError("No access_token found in token.json")
-
-    return access_token
-
-
-def make_headers(access_token):
-    return {
-        "Authorization": f"Bearer {access_token}",
-    }
-
-
-def get_profile(access_token):
-    response = requests.get(
-        ME_URL,
-        headers=make_headers(access_token),
-        timeout=30,
-    )
-    response.raise_for_status()
-    return response.json()["data"]
 
 
 def get_likes(access_token, user_id):
@@ -51,6 +20,7 @@ def get_likes(access_token, user_id):
         url,
         headers=make_headers(access_token),
         timeout=30,
+        params={"max_results": 100},
     )
     response.raise_for_status()
 
@@ -65,6 +35,7 @@ def get_following(access_token, user_id):
         url,
         headers=make_headers(access_token),
         timeout=30,
+        params={"max_results": 100},
     )
     response.raise_for_status()
 
