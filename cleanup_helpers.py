@@ -125,3 +125,69 @@ def fetch_all_users_from_paginated_endpoint(
         page_number += 1
 
     return all_users
+
+
+def fetch_all_timeline_posts(
+    access_token,
+    base_url,
+    max_results_per_page,
+    start_time=None,
+    end_time=None,
+    exclude=None,
+    tweet_fields=None,
+    expansions=None,
+):
+    all_posts = []
+    includes = {}
+    next_token = None
+    page_number = 1
+
+    while True:
+        params = {
+            "max_results": max_results_per_page,
+        }
+
+        if start_time:
+            params["start_time"] = start_time
+        if end_time:
+            params["end_time"] = end_time
+        if exclude:
+            params["exclude"] = ",".join(exclude)
+        if tweet_fields:
+            params["tweet.fields"] = ",".join(tweet_fields)
+        if expansions:
+            params["expansions"] = ",".join(expansions)
+        if next_token:
+            params["pagination_token"] = next_token
+
+        response = requests.get(
+            base_url,
+            headers=make_headers(access_token),
+            params=params,
+            timeout=30,
+        )
+        response.raise_for_status()
+
+        payload = response.json()
+        page_posts = payload.get("data", [])
+        meta = payload.get("meta", {})
+
+        all_posts.extend(page_posts)
+
+        for key, value in payload.get("includes", {}).items():
+            includes.setdefault(key, [])
+            includes[key].extend(value)
+
+        print(
+            f"Fetched timeline page {page_number}: "
+            f"{len(page_posts)} posts "
+            f"(total so far: {len(all_posts)})"
+        )
+
+        next_token = meta.get("next_token")
+        if not next_token:
+            break
+
+        page_number += 1
+
+    return all_posts, includes

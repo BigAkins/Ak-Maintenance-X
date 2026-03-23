@@ -4,6 +4,9 @@ TOKEN_FILE = "token.json"
 LOGS_DIR = "logs"
 PROTECTED_ACCOUNTS_FILE = "protected_accounts.json"
 NON_FOLLOWER_CANDIDATES_FILE = "non_follower_candidates.json"
+REPOST_CANDIDATES_FILE = "repost_candidates.json"
+LIKE_CANDIDATES_FILE = "like_candidates.json"
+POST_DELETE_CANDIDATES_FILE = "post_delete_candidates.json"
 
 # Safe defaults
 DRY_RUN_DEFAULT = True
@@ -14,6 +17,7 @@ STOP_ON_RATE_LIMIT_DEFAULT = True
 
 # Analysis / pagination settings
 MAX_RESULTS_PER_PAGE = 1000
+TIMELINE_MAX_RESULTS_PER_PAGE = 100
 
 # Built-in fallback protected accounts
 DEFAULT_KEEP_USERNAMES = {"akinooola"}
