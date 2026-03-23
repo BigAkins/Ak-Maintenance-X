@@ -10,3 +10,4 @@ protected_accounts.json
 repost_candidates.json
 like_candidates.json
 post_delete_candidates.json
+.DS_Store
